@@ -1,0 +1,26 @@
+[project]
+name = "trainable-tool-agent-lab"
+version = "0.1.0"
+description = "A trainable after-sales tool agent workbench"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.11,<3",
+    "python-dotenv>=1.1,<2",
+    "PyYAML>=6.0.2,<7",
+]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["pytest>=8.4,<9"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tool_agent_lab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

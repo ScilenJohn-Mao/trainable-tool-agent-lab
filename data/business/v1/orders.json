@@ -1,0 +1,54 @@
+[
+  {
+    "order_id": "ORD-1001",
+    "owner_id": "demo-user",
+    "product_name": "陶瓷马克杯",
+    "category": "general_goods",
+    "currency": "CNY",
+    "paid_amount_minor": 12900,
+    "promised_delivery_at": "2026-09-15T12:00:00+08:00",
+    "delivered_at": "2026-09-15T10:00:00+08:00",
+    "damage_verified": true,
+    "refunded_amount_minor": 0,
+    "coupon_amount_minor": 0
+  },
+  {
+    "order_id": "ORD-1002",
+    "owner_id": "demo-user",
+    "product_name": "玻璃收纳罐套装",
+    "category": "general_goods",
+    "currency": "CNY",
+    "paid_amount_minor": 25900,
+    "promised_delivery_at": "2026-09-14T10:00:00+08:00",
+    "delivered_at": "2026-09-15T12:00:00+08:00",
+    "damage_verified": true,
+    "refunded_amount_minor": 0,
+    "coupon_amount_minor": 0
+  },
+  {
+    "order_id": "ORD-1003",
+    "owner_id": "demo-user",
+    "product_name": "桌面台灯",
+    "category": "general_goods",
+    "currency": "CNY",
+    "paid_amount_minor": 9900,
+    "promised_delivery_at": "2026-09-16T12:00:00+08:00",
+    "delivered_at": "2026-09-16T10:00:00+08:00",
+    "damage_verified": true,
+    "refunded_amount_minor": 9900,
+    "coupon_amount_minor": 0
+  },
+  {
+    "order_id": "ORD-1004",
+    "owner_id": "demo-user",
+    "product_name": "数字课程兑换码",
+    "category": "digital_goods",
+    "currency": "CNY",
+    "paid_amount_minor": 5900,
+    "promised_delivery_at": "2026-09-16T09:00:00+08:00",
+    "delivered_at": "2026-09-16T09:00:00+08:00",
+    "damage_verified": false,
+    "refunded_amount_minor": 0,
+    "coupon_amount_minor": 0
+  }
+]

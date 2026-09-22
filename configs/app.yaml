@@ -1,0 +1,7 @@
+config_version: app-v1
+mode: manual
+dev_owner_id: demo-user
+
+# Relative paths are anchored to the project root, regardless of the working directory.
+runtime_dir: artifacts/runtime
+business_data_dir: data/business/v1

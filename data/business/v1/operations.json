@@ -1,0 +1,24 @@
+[
+  {
+    "operation_key": "refund-ORD-1003-original",
+    "order_id": "ORD-1003",
+    "owner_id": "demo-user",
+    "action": "request_refund",
+    "amount_minor": 9900,
+    "currency": "CNY",
+    "status": "succeeded",
+    "committed_at": "2026-09-17T11:00:00+08:00",
+    "policy_version": "mock-policy-v1",
+    "rule_id": "R-REFUND-01",
+    "approval": {
+      "proposal_id": "proposal-ORD-1003-refund",
+      "proposal_version": 1,
+      "request_id": "approval-request-ORD-1003",
+      "owner_id": "demo-user",
+      "order_id": "ORD-1003",
+      "action": "request_refund",
+      "amount_minor": 9900,
+      "approved_at": "2026-09-17T10:59:00+08:00"
+    }
+  }
+]

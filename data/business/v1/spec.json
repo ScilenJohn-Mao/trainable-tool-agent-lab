@@ -1,0 +1,40 @@
+{
+  "version": "business-v1",
+  "purpose": "手工联调样例；不作为训练集或固定测试集",
+  "business_time": "2026-09-17T12:00:00+08:00",
+  "currency": "CNY",
+  "amount_unit": "fen",
+  "minor_units_per_major": 100,
+  "policy_version": "mock-policy-v1",
+  "effective_from": "2026-09-01T00:00:00+08:00",
+  "effective_to": "2026-10-01T00:00:00+08:00",
+  "task_types": [
+    "policy_refund",
+    "refund_and_coupon",
+    "reconcile_operation",
+    "clarify_or_handoff"
+  ],
+  "rules": {
+    "refund": {
+      "rule_id": "R-REFUND-01",
+      "category": "general_goods",
+      "requires_verified_damage": true,
+      "window_days": 7,
+      "amount": "full_paid_amount",
+      "max_per_order": 1
+    },
+    "delay_coupon": {
+      "rule_id": "R-DELAY-01",
+      "category": "general_goods",
+      "minimum_delay_hours": 24,
+      "amount_minor": 500,
+      "max_per_order": 1,
+      "compatible_with_refund": true
+    },
+    "handoff": {
+      "rule_id": "R-HANDOFF-01",
+      "reasons": ["unsupported_category", "outside_refund_window", "unverified_damage", "order_unresolved"]
+    }
+  },
+  "write_actions_requiring_approval": ["request_refund", "issue_coupon", "create_handoff"]
+}

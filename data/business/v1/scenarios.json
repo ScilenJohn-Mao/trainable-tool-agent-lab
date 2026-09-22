@@ -1,0 +1,100 @@
+[
+  {
+    "scenario_id": "refund-damaged",
+    "task_type": "policy_refund",
+    "owner_id": "demo-user",
+    "user_message": "ORD-1001 的杯子到货破损，平台已核实，请帮我退款。",
+    "order_id": "ORD-1001",
+    "clarification_reply": null,
+    "known_operation_key": null,
+    "expected": {
+      "order_id": "ORD-1001",
+      "refund_total_minor": 12900,
+      "coupon_total_minor": 0,
+      "new_actions": ["request_refund"],
+      "must_clarify": false,
+      "must_query_operation": false,
+      "handoff_reason": null,
+      "rule_ids": ["R-REFUND-01"]
+    }
+  },
+  {
+    "scenario_id": "refund-with-delay-coupon",
+    "task_type": "refund_and_coupon",
+    "owner_id": "demo-user",
+    "user_message": "ORD-1002 晚到了还碎了，损坏已经核实。请退款，并按政策给我延迟补偿。",
+    "order_id": "ORD-1002",
+    "clarification_reply": null,
+    "known_operation_key": null,
+    "expected": {
+      "order_id": "ORD-1002",
+      "refund_total_minor": 25900,
+      "coupon_total_minor": 500,
+      "new_actions": ["request_refund", "issue_coupon"],
+      "must_clarify": false,
+      "must_query_operation": false,
+      "handoff_reason": null,
+      "rule_ids": ["R-REFUND-01", "R-DELAY-01"]
+    }
+  },
+  {
+    "scenario_id": "check-uncertain-refund",
+    "task_type": "reconcile_operation",
+    "owner_id": "demo-user",
+    "user_message": "ORD-1003 刚才确认退款后没有收到结果，请查一下是否成功。",
+    "order_id": "ORD-1003",
+    "clarification_reply": null,
+    "known_operation_key": "refund-ORD-1003-original",
+    "expected": {
+      "order_id": "ORD-1003",
+      "refund_total_minor": 9900,
+      "coupon_total_minor": 0,
+      "new_actions": [],
+      "must_clarify": false,
+      "must_query_operation": true,
+      "handoff_reason": null,
+      "rule_ids": ["R-REFUND-01"]
+    }
+  },
+  {
+    "scenario_id": "clarify-order-before-refund",
+    "task_type": "clarify_or_handoff",
+    "owner_id": "demo-user",
+    "user_message": "我买的东西坏了，帮我退一下款。",
+    "order_id": null,
+    "clarification_reply": {
+      "message": "是 ORD-1001 的杯子，平台已经核实破损。",
+      "order_id": "ORD-1001"
+    },
+    "known_operation_key": null,
+    "expected": {
+      "order_id": "ORD-1001",
+      "refund_total_minor": 12900,
+      "coupon_total_minor": 0,
+      "new_actions": ["request_refund"],
+      "must_clarify": true,
+      "must_query_operation": false,
+      "handoff_reason": null,
+      "rule_ids": ["R-REFUND-01"]
+    }
+  },
+  {
+    "scenario_id": "handoff-digital-goods",
+    "task_type": "clarify_or_handoff",
+    "owner_id": "demo-user",
+    "user_message": "ORD-1004 的课程兑换码无法使用，请帮我退费。",
+    "order_id": "ORD-1004",
+    "clarification_reply": null,
+    "known_operation_key": null,
+    "expected": {
+      "order_id": "ORD-1004",
+      "refund_total_minor": 0,
+      "coupon_total_minor": 0,
+      "new_actions": ["create_handoff"],
+      "must_clarify": false,
+      "must_query_operation": false,
+      "handoff_reason": "unsupported_category",
+      "rule_ids": ["R-HANDOFF-01"]
+    }
+  }
+]

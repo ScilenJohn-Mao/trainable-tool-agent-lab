@@ -1,0 +1,49 @@
+rules_version = 1
+
+# Only project-owned source and explicitly selected resources enter the archive.
+include = [
+  "README.md", ".gitignore", ".python-version", ".env.example",
+  "pyproject.toml", "uv.lock",
+  "src", "apps", "scripts", "tests", "configs", "deploy", "docs",
+  "data/business", "data/cases", "data/retrieval", "data/scenarios",
+  "frontend", "training/art",
+  "reports/progress.md", "reports/M1/acceptance.md",
+]
+
+required_files = [
+  "README.md", ".gitignore", ".python-version", "pyproject.toml", "uv.lock",
+  "src/tool_agent_lab/__init__.py", "scripts/package_project.py",
+  "src/tool_agent_lab/settings.py", "configs/app.yaml", ".env.example",
+  "scripts/check_business_data.py", "data/business/v1/README.md",
+  "data/business/v1/spec.json", "data/business/v1/orders.json",
+  "data/business/v1/operations.json", "data/business/v1/scenarios.json",
+  "deploy/package_rules.toml", "deploy/README.md",
+]
+
+exclude_directories = [
+  ".venv", "venv", "env", ".uv", ".uv-cache", "uv-cache", ".cache",
+  "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+  ".git", ".idea", ".vscode", "node_modules", "artifacts",
+  "dist", "build", ".next", "coverage", "logs", "checkpoints", "weights",
+  "model-cache", "huggingface",
+]
+
+exclude_files = [
+  ".env", ".env.*", "*.local", "*.local.*",
+  "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa*", "id_ed25519*",
+  "credentials.*", "secrets.*",
+  "*.pyc", "*.pyo", "*.pyd", "*.egg-info",
+  "*.db", "*.db-*", "*.sqlite", "*.sqlite-*", "*.sqlite3", "*.sqlite3-*",
+  "*.log", "*.safetensors", "*.pt", "*.pth", "*.ckpt", "*.bin",
+  "*.zip", "*.zip.sha256", "*.tar", "*.tar.*", "*.tgz", "*.7z",
+]
+
+# These components are introduced in M2/M4. Once present, their manifests and
+# real lockfiles are mandatory; do not create placeholder lockfiles in M1.
+[[required_when_present]]
+directory = "frontend"
+files = ["frontend/package.json", "frontend/package-lock.json"]
+
+[[required_when_present]]
+directory = "training/art"
+files = ["training/art/pyproject.toml", "training/art/uv.lock"]
