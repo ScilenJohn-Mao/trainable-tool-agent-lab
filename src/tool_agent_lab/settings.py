@@ -1,4 +1,4 @@
-"""Load application settings and inspect the paths used by future business modules."""
+"""Load application settings and inspect resolved application paths."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class Settings(BaseModel):
 
     @property
     def app_db_path(self) -> Path:
-        """Tasks, business records and events will share this application database."""
+        """Application database path for tasks, business records and events."""
         return self.runtime_dir / "app.sqlite3"
 
     @property
@@ -38,7 +38,7 @@ class Settings(BaseModel):
         return self.runtime_dir / "logs"
 
     def prepare_runtime_dirs(self) -> None:
-        """Create runtime directories only; database initialization belongs to M1-008."""
+        """Create runtime and log directories without initializing databases."""
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
     def summary(self) -> dict[str, str]:

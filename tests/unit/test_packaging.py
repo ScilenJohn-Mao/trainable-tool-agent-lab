@@ -86,6 +86,10 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "scripts/old.tar.gz": "ignore",
         "scripts/.git/config": "ignore",
         "artifacts/generated.json": "ignore",
+        "reports/progress.md": "ignore",
+        "reports/acceptance.md": "ignore",
+        "docs/AGENTS.md": "ignore",
+        "src/.codex/config.toml": "ignore",
         "ART/unrelated.py": "ignore",
         "research.md": "ignore",
     }

@@ -1,4 +1,4 @@
-"""Check the small M1 fixture set and preview its hand-written expectations."""
+"""Check the business fixtures and preview their hand-written expectations."""
 
 from __future__ import annotations
 
