@@ -75,6 +75,17 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_business_rules.py
 ```
 
+## 任务与人工确认
+
+`TaskService` 创建和查询带归属的任务、启动当前尝试并保存版本化提案；
+`ApprovalService` 绑定当前提案的完整参数快照，记录批准或拒绝。
+同一确认请求重试返回原记录，参数改变后须确认新版本。
+接口和临时库退款例子见[任务与确认说明](docs/tasks_and_approvals.md)。
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_approvals.py
+```
+
 ## 受保护业务写入
 
 `BusinessService.prepare` 在工具调用前持久化 pending 操作键，重复准备复用原记录；

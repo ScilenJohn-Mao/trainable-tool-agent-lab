@@ -72,6 +72,15 @@ class TaskRepository:
             (attempt_id, task_id, owner_id),
         ).rowcount == 1
 
+    def set_attempt_status(
+        self, task_id: str, attempt_id: str, owner_id: str, status: TaskStatus,
+    ) -> bool:
+        require_transaction(self.connection)
+        return self.connection.execute(
+            "UPDATE attempts SET status = ? WHERE task_id = ? AND attempt_id = ? AND owner_id = ?",
+            (status, task_id, attempt_id, owner_id),
+        ).rowcount == 1
+
     def add_proposal(self, proposal: ActionProposal, owner_id: str) -> None:
         require_transaction(self.connection)
         if self.get_attempt(proposal.task_id, proposal.attempt_id, owner_id) is None:
@@ -177,6 +186,25 @@ class TaskRepository:
                     )""",
             (consumed_at.isoformat(), request_id, owner_id, task_id, owner_id),
         ).rowcount == 1
+
+    def approval_request_exists(self, request_id: str) -> bool:
+        """Detect request ID collisions without exposing an unrelated confirmation."""
+        return self.connection.execute(
+            "SELECT 1 FROM approvals WHERE request_id = ?", (request_id,)
+        ).fetchone() is not None
+
+    def get_proposal_approval(
+        self, task_id: str, proposal_id: str, version: int, owner_id: str,
+    ) -> Approval | None:
+        row = self.connection.execute(
+            """SELECT a.request_id FROM approvals a
+                JOIN proposals p USING (proposal_id, proposal_version)
+                JOIN tasks t ON t.task_id = p.task_id
+                WHERE p.task_id = ? AND p.proposal_id = ? AND p.proposal_version = ?
+                    AND a.owner_id = ? AND t.owner_id = ?""",
+            (task_id, proposal_id, version, owner_id, owner_id),
+        ).fetchone()
+        return self.get_approval(task_id, row["request_id"], owner_id) if row is not None else None
 
     def approval_consumed_at(
         self, task_id: str, request_id: str, owner_id: str

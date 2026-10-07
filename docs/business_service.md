@@ -56,8 +56,9 @@ prepare 与 execute 分别打开事务，执行时会再次核对授权和最新
 任务取消或政策过期后仍可读。新的键和批准不能产生第二笔同订单退款/补偿。
 同工单、订单（可为空）和原因的已成功转人工也不能重复创建。取消不撤销已提交动作。
 
-这些是 Python 业务接口。集成测试通过存储接口准备合成确认记录，并在隔离数据库
-核对实际写入，不代表完整用户确认入口、MCP 工具调用或响应丢失恢复流程。
+这些是 Python 业务接口。业务事务独立测试通过存储接口准备合成确认记录；
+[任务与确认服务](tasks_and_approvals.md)另通过实际确认入口验证退款写入。
+它们在隔离数据库核对结果，不代表 API/MCP 工具调用或响应丢失恢复流程。
 
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_business_transactions.py
