@@ -67,6 +67,14 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 
 第一条命令只读取应用配置指向的 `business_data_dir`，检查金额、引用和初始退款账本，输出手工期望及 `business_execution: not_run`；不会创建数据库、执行退款或调用模型。每个样例须独立重置初始状态，期望答案不提供给模型。
 
+## 业务规则资格检查
+
+`BusinessRules` 按模拟规格判断退款、延迟补偿和转人工的资格与金额，返回结构化原因；默认使用固定业务时间，检查政策生效区间及引用。它只做纯规则判断，不执行退款、消费确认或写数据库。调用示例见[业务规则说明](docs/business_rules.md)。
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_business_rules.py
+```
+
 ## 共享契约预览
 
 [契约说明](docs/contracts.md)定义任务/尝试身份、七个状态、退款/补偿/转人工参数、提案快照、批准或拒绝、运行时执行上下文和事件。
