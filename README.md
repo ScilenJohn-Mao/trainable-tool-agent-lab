@@ -1,6 +1,6 @@
 # Trainable Tool Agent Lab
 
-模拟售后业务的数据、共享契约、应用配置与源码打包工具。数据和契约预览命令只读取样例，不执行退款或启动 Agent。
+模拟售后业务的数据、共享契约、应用配置、SQLite 存储与源码打包工具。数据和契约预览命令只读取样例，不执行退款或启动 Agent。
 
 ## 本地轻量环境
 
@@ -39,6 +39,16 @@ Python 调用入口为 `from tool_agent_lab.settings import load_settings`。配
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_settings.py
 ```
+
+## 应用数据库初始化
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.storage.database
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.storage.database --database artifacts/runtime/demo.sqlite3
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_database.py
+```
+
+默认初始化配置中的 `app_db_path`；`--database` 指定的相对路径以当前工作目录为基准。命令创建父目录和空应用表，输出绝对路径及 schema 版本，重复运行保留已有数据。checkpoint 数据库单独管理。表、事务、唯一约束及 Python 接口见[存储说明](docs/storage.md)。
 
 ## 最小业务数据与预期结果预览
 
