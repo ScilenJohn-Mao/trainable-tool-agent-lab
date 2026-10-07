@@ -1,0 +1,317 @@
+{
+  "format_version": 1,
+  "documents": [
+    {
+      "policy_id": "P-REFUND-ELIGIBILITY",
+      "version": "mock-policy-v1",
+      "title": "普通实物商品到货损坏退款",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01"]},
+      "sections": [
+        {"section_id": "eligibility", "text": "普通实物商品 general_goods 已收货，平台已核实到货损坏 damage_verified=true，且收货后不超过 7×24 小时，可提出全额退款。用户说破损、碎裂或无法使用，只是问题描述，不能替代平台核实记录。"},
+        {"section_id": "execution", "text": "订单实付是全部可退金额，退款金额必须等于实付的 CNY 整数分。每订单最多一笔退款，已退时核对原结果。满足资格仍须提案和人工确认，确认后由业务服务复核再执行。"}
+      ]
+    },
+    {
+      "policy_id": "P-REFUND-AMOUNT",
+      "version": "mock-policy-v1",
+      "title": "全额退款的金额单位与范围",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01"]},
+      "sections": [
+        {"section_id": "amount", "text": "退款必须等于订单全部实付 paid_amount_minor；币种 CNY，最小单位分，100 分等于 1 元。实付 12900 分只能提案退 12900 分，不能把 129 元写成 129 分，也不能写成浮点数。"},
+        {"section_id": "scope", "text": "模拟订单实付已经包含全部可退金额，不另加运费、不拆分商品、不提供部分退款。金额正确不代表已获授权，退款仍须满足损坏、收货期限、未退款和人工确认条件。"}
+      ]
+    },
+    {
+      "policy_id": "P-REFUND-WINDOW",
+      "version": "mock-policy-v1",
+      "title": "七天退款期限与超期处理",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "window", "text": "从实际收货 delivered_at 到固定业务时间计算经过时长，退款期限为 7×24 小时，恰好 7 天包含在内。使用带时区时间比较，不按自然日期计数，不使用电脑当天时间。"},
+        {"section_id": "outside", "text": "超过 7×24 小时不自动退款；对于已收货且未退款的普通实物商品，可按 outside_refund_window 原因提案转人工。未核实损坏时也需如实说明。转人工不是已批准退款，仍需确认。"}
+      ]
+    },
+    {
+      "policy_id": "P-REFUND-ONCE",
+      "version": "mock-policy-v1",
+      "title": "已退款订单与重复退款",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01"]},
+      "sections": [
+        {"section_id": "uniqueness", "text": "每订单最多一笔全额退款。refunded_amount_minor 大于 0 时不得新增退款；更换操作键或重新确认也不能再次退。已退款事实优先核对，不能因为用户不知道结果而重退。"},
+        {"section_id": "existing", "text": "已知原 operation_key 时先查询对应账本。成功账本保留原退款金额与提交时间；重复同键执行返回已有成功记录，不产生新的业务写入。只有账本与订单事实一致才报告已退款。"}
+      ]
+    },
+    {
+      "policy_id": "P-DELAY-ELIGIBILITY",
+      "version": "mock-policy-v1",
+      "title": "晚到至少二十四小时的补偿资格",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-DELAY-01"]},
+      "sections": [
+        {"section_id": "delay", "text": "普通实物商品 general_goods 已送达，实际送达 delivered_at 比承诺送达 promised_delivery_at 晚至少 24 小时，才可提出延迟补偿。恰好 24 小时符合，未达到则不符合；不能只凭用户说迟到认定。"},
+        {"section_id": "independence", "text": "补偿不要求损坏已核实，也不继承退款的 7 天期限。符合延迟条件且尚未补偿时，人工确认后发固定 500 分券；数字商品不支持自动补偿。"}
+      ]
+    },
+    {
+      "policy_id": "P-DELAY-AMOUNT",
+      "version": "mock-policy-v1",
+      "title": "延迟补偿券的固定金额",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-DELAY-01"]},
+      "sections": [
+        {"section_id": "amount", "text": "当前版本 mock-policy-v1 延迟补偿固定为 500 分 CNY，即 5 元券。不是 500 元，不按实付比例计算，也不能因延迟更久或用户要求而增加金额。"},
+        {"section_id": "conditions", "text": "固定金额只是参数要求；仍须普通实物商品已送达、晚到至少 24 小时、尚未发券并获得绑定参数的人工确认。错误金额即使确认也不能执行。"}
+      ]
+    },
+    {
+      "policy_id": "P-DELAY-ONCE",
+      "version": "mock-policy-v1",
+      "title": "延迟补偿券的重复保护",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-DELAY-01"]},
+      "sections": [
+        {"section_id": "uniqueness", "text": "每订单最多一张延迟补偿券。coupon_amount_minor 大于 0 时不得再发同类券；同键重试核对原记录，新操作键或新确认都不能绕过订单补偿唯一性。"},
+        {"section_id": "refund", "text": "已有退款不等于已有补偿。退款和补偿分别检查资格及已有金额；已退款但尚未补偿的普通实物订单仍可依据送达延迟条件提案补偿，金额仍为 500 分。"}
+      ]
+    },
+    {
+      "policy_id": "P-COMBINED-ACTIONS",
+      "version": "mock-policy-v1",
+      "title": "损坏退款与晚到补偿的组合",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01"]},
+      "sections": [
+        {"section_id": "compatibility", "text": "全额退款与 500 分延迟补偿可以组合，但两个动作分别满足各自条件。退款资格不自动带来补偿；补偿也不代表损坏已经核实或仍在退款期限内。"},
+        {"section_id": "partial", "text": "两个明确动作逐项提案和确认，可以在一次交互中批准两个明确列出的提案。它们各自提交业务事务，可能部分完成；保留已成功动作，核对未完成动作，不能重新执行已经退款或发券的部分。"}
+      ]
+    },
+    {
+      "policy_id": "P-DIGITAL-HANDOFF",
+      "version": "mock-policy-v1",
+      "title": "数字内容订单的人工处理",
+      "category": "digital_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "unsupported", "text": "digital_goods 数字商品不属于 general_goods，不能套用普通实物的自动退款或延迟补偿。即使用户称数字内容损坏、无法激活或发放迟到，也不能自动退款或发券。"},
+        {"section_id": "handoff", "text": "按 unsupported_category 原因提出人工工单，保存订单和问题摘要，人工确认后创建；不承诺人工一定退款。数字内容发放时间沿用 delivered_at，不能据此把品类改成实物商品。"}
+      ]
+    },
+    {
+      "policy_id": "P-HANDOFF-REASONS",
+      "version": "mock-policy-v1",
+      "title": "人工工单的原因与事实",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "reasons", "text": "转人工仅使用与事实匹配的原因：unsupported_category 不支持的品类，outside_refund_window 退款超期，unverified_damage 损坏未核实，order_unresolved 澄清后仍无法定位订单。不能随意编造原因。"},
+        {"section_id": "facts", "text": "已收货未退款的普通实物订单，退款超期或损坏未核实可以转人工；已退款不能再用超期或未核实损坏原因重复处理退款问题。符合自动退款且没有上述问题时，不凭空转人工。转人工无金额且需要人工确认。"}
+      ]
+    },
+    {
+      "policy_id": "P-ORDER-CLARIFICATION",
+      "version": "mock-policy-v1",
+      "title": "缺失订单号时的澄清",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "first", "text": "没有可定位订单时，先请求用户补充订单号，不根据商品描述猜测订单。澄清前不退款、不发券，也不直接以 order_unresolved 创建人工工单。用户补充后重查可访问订单事实。"},
+        {"section_id": "unresolved", "text": "已经澄清一次仍无法定位订单，可以用 order_unresolved 提案转人工，此时 order_id 为 null，摘要说明缺失信息。澄清是否发生由可信运行时记录，模型不能自称已经澄清来取得执行权限。"}
+      ]
+    },
+    {
+      "policy_id": "P-DAMAGE-VERIFICATION",
+      "version": "mock-policy-v1",
+      "title": "损坏描述与平台核实记录",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-HANDOFF-01", "R-DELAY-01"]},
+      "sections": [
+        {"section_id": "unverified", "text": "自动退款要求 damage_verified=true。对于已收货且未退款的普通实物商品，损坏未核实时不能自动退款，可按 unverified_damage 提案转人工并保留用户描述，不擅自修改核实标志。"},
+        {"section_id": "coupon", "text": "损坏未核实不阻断独立的延迟补偿资格。订单已送达、晚到至少 24 小时且尚未补偿时，可以另行提出 500 分券并请求确认，不能将发券说成已经退款。"}
+      ]
+    },
+    {
+      "policy_id": "P-DELIVERY-FACTS",
+      "version": "mock-policy-v1",
+      "title": "收货事实与时间核对",
+      "category": "general_goods",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "not_delivered", "text": "delivered_at 晚于业务时间表示尚未实际收货，不满足自动退款或延迟补偿的已送达条件。不能把将来送达时间当作已晚到，也不能以普通实物的超期或损坏未核实原因绕过未收货状态。"},
+        {"section_id": "comparison", "text": "以带时区的实际送达、承诺送达和固定业务时间为准。收货期限比较经过时长，晚到比较实际送达与承诺送达的差，不以用户报出的天数替换订单记录。"}
+      ]
+    },
+    {
+      "policy_id": "P-POLICY-VALIDITY",
+      "version": "mock-policy-v1",
+      "title": "政策版本、生效区间与引用",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "interval", "text": "mock-policy-v1 适用区间为 [2026-09-01T00:00:00+08:00, 2026-10-01T00:00:00+08:00)，包含生效时刻、不包含失效时刻。固定业务时间 2026-09-17T12:00:00+08:00 使用 v1，不能选过期 v0 或尚未生效 v2。"},
+        {"section_id": "reference", "text": "引用保存政策 ID、版本、生效区间和具体 section_id。检索文档的引用用于定位原文；业务服务核对 spec.json 的规则引用与授权，检索命中或文档引用不能自行放行业务写入。"}
+      ]
+    },
+    {
+      "policy_id": "P-WRITE-APPROVAL",
+      "version": "mock-policy-v1",
+      "title": "售后写操作的人工确认",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "required", "text": "request_refund、issue_coupon、create_handoff 三种写操作都需要提案、人工确认、执行。查询订单、读取政策和核对操作不等于批准；用户原始请求或模型输出 approved=true 不能代替确认记录。"},
+        {"section_id": "refusal", "text": "人工拒绝后不执行对应动作。批准绑定订单、金额、动作参数、提案版本和请求 ID，业务服务还需检查最新订单、政策有效期和归属；人工同意不能使错误金额或不合资格动作变得合法。"}
+      ]
+    },
+    {
+      "policy_id": "P-PROPOSAL-CHANGES",
+      "version": "mock-policy-v1",
+      "title": "提案变更与重新确认",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "change", "text": "修改订单、金额、动作或参数后，追加新提案版本并重新请求人工确认。旧确认绑定原快照，不能沿用来执行新提案，也不能用摘要相似替代完整参数对照。"},
+        {"section_id": "duplicate", "text": "相同确认请求的精确重复只返回原回执，不重复消费批准或恢复已消费权限。更换请求 ID 不代表可以再执行已经成功的退款、补偿或同问题转人工。"}
+      ]
+    },
+    {
+      "policy_id": "P-OPERATION-LOOKUP",
+      "version": "mock-policy-v1",
+      "title": "按原操作键核对售后结果",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "statuses", "text": "可信运行时在调用前保存 operation_key。get_operation 按原键和任务归属查询账本：pending 表示尚未记录成功提交，succeeded 表示已提交，failed 表示明确失败；查无记录为 null，不能当成已退款或已失败。"},
+        {"section_id": "privacy", "text": "查询只返回当前用户可访问的操作。未知键与其他归属的键都不暴露记录；不能换订单或猜测其他用户操作键来核对。查询成功只表示得到查询结果，不代表其内业务动作成功。"}
+      ]
+    },
+    {
+      "policy_id": "P-UNCERTAIN-OUTCOME",
+      "version": "mock-policy-v1",
+      "title": "超时或响应丢失后的处理",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "unknown", "text": "调用超时或没有收到响应不等于业务未执行。结果不确定时保留原 operation_key，先查询原键；不能换键重新退款或发券，也不能对用户承诺失败。"},
+        {"section_id": "committed", "text": "如果原键账本已经 succeeded，以实际金额与提交时间报告已完成，不重复写入。如果仍为 pending 或查无记录，保持结果待核对，由执行流程决定后续；政策说明本身不会执行重试或恢复。"}
+      ]
+    },
+    {
+      "policy_id": "P-FAILED-OPERATION",
+      "version": "mock-policy-v1",
+      "title": "明确失败与待核对状态的区分",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-REFUND-01", "R-DELAY-01", "R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "failed", "text": "账本 failed 是明确失败终态，不是已退款、已补偿或已转人工。同键重复不能把 failed 重置成 pending 或当作新的成功写入；模型文字不能改变账本终态。"},
+        {"section_id": "rejection", "text": "业务服务拒绝未确认、错金额或失效政策，不表示已产生成功业务。执行前已保存的 pending 记录可能仍然存在；应读取实际记录与错误原因，不能把所有错误统一解释成未执行，也不能绕过保护直接改订单。"}
+      ]
+    },
+    {
+      "policy_id": "P-HANDOFF-ONCE",
+      "version": "mock-policy-v1",
+      "title": "转人工的结果与重复工单",
+      "category": "all",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "source": {"file": "spec.json", "pointer": "", "rule_ids": ["R-HANDOFF-01"]},
+      "sections": [
+        {"section_id": "result", "text": "转人工无退款或补偿金额，确认后保存人工工单及可核对原因/摘要。成功创建人工工单只代表交给人工处理，不代表退款已完成或金额已批准。"},
+        {"section_id": "uniqueness", "text": "同一工单任务、订单与原因的人工处理按同一问题去重，改键或重新确认不能重复创建。同键查询已有成功记录；原因必须和订单事实或已完成澄清相符，不能靠改原因规避检查。"}
+      ]
+    },
+    {
+      "policy_id": "P-REFUND-ELIGIBILITY",
+      "version": "mock-policy-v0",
+      "title": "旧版普通实物商品到货损坏退款",
+      "category": "general_goods",
+      "effective_from": "2026-08-01T00:00:00+08:00",
+      "effective_to": "2026-09-01T00:00:00+08:00",
+      "source": {"file": "policy_specs.json", "pointer": "/versions/0", "rule_ids": ["R-REFUND-01"]},
+      "sections": [
+        {"section_id": "eligibility", "text": "旧版 mock-policy-v0 普通实物商品 general_goods 已收货、平台已核实损坏，收货后不超过 5×24 小时可提案退全部实付 CNY 整数分。恰好 5 天符合；每订单最多一笔，已退不再退，须人工确认。"},
+        {"section_id": "validity", "text": "仅适用于 [2026-08-01T00:00:00+08:00, 2026-09-01T00:00:00+08:00)。固定业务时间 2026-09-17T12:00:00+08:00 已失效，不能套用旧版 5 天期限。"}
+      ]
+    },
+    {
+      "policy_id": "P-DELAY-AMOUNT",
+      "version": "mock-policy-v0",
+      "title": "旧版延迟补偿券金额",
+      "category": "general_goods",
+      "effective_from": "2026-08-01T00:00:00+08:00",
+      "effective_to": "2026-09-01T00:00:00+08:00",
+      "source": {"file": "policy_specs.json", "pointer": "/versions/0", "rule_ids": ["R-DELAY-01"]},
+      "sections": [
+        {"section_id": "amount", "text": "旧版 mock-policy-v0 普通实物商品已送达、晚到至少 24 小时且尚未补偿，经确认发 300 分 CNY，即 3 元券，每订单最多一张，可与退款组合。不要求损坏核实，不继承退款期限。"},
+        {"section_id": "validity", "text": "仅适用于 [2026-08-01T00:00:00+08:00, 2026-09-01T00:00:00+08:00)。固定业务时间 2026-09-17T12:00:00+08:00 已失效，不能用旧版 300 分替代当前 500 分。"}
+      ]
+    },
+    {
+      "policy_id": "P-REFUND-ELIGIBILITY",
+      "version": "mock-policy-v2",
+      "title": "未来版普通实物商品到货损坏退款",
+      "category": "general_goods",
+      "effective_from": "2026-10-01T00:00:00+08:00",
+      "effective_to": "2026-11-01T00:00:00+08:00",
+      "source": {"file": "policy_specs.json", "pointer": "/versions/1", "rule_ids": ["R-REFUND-01"]},
+      "sections": [
+        {"section_id": "eligibility", "text": "未来版 mock-policy-v2 普通实物商品 general_goods 已收货、平台已核实损坏，收货后不超过 10×24 小时可提案退全部实付 CNY 整数分。恰好 10 天符合；每订单最多一笔，已退不再退，须人工确认。"},
+        {"section_id": "validity", "text": "仅适用于 [2026-10-01T00:00:00+08:00, 2026-11-01T00:00:00+08:00)。固定业务时间 2026-09-17T12:00:00+08:00 尚未生效，不能提前使用 10 天期限；这里只保存未来政策文本和对应规格。"}
+      ]
+    },
+    {
+      "policy_id": "P-DELAY-AMOUNT",
+      "version": "mock-policy-v2",
+      "title": "未来版延迟补偿券金额",
+      "category": "general_goods",
+      "effective_from": "2026-10-01T00:00:00+08:00",
+      "effective_to": "2026-11-01T00:00:00+08:00",
+      "source": {"file": "policy_specs.json", "pointer": "/versions/1", "rule_ids": ["R-DELAY-01"]},
+      "sections": [
+        {"section_id": "amount", "text": "未来版 mock-policy-v2 普通实物商品已送达、晚到至少 24 小时且尚未补偿，经确认发 800 分 CNY，即 8 元券，每订单最多一张，可与退款组合。不要求损坏核实，不继承退款期限。"},
+        {"section_id": "validity", "text": "仅适用于 [2026-10-01T00:00:00+08:00, 2026-11-01T00:00:00+08:00)。固定业务时间 2026-09-17T12:00:00+08:00 尚未生效，不能用未来 800 分替代当前 500 分；业务服务仍使用当前规格。"}
+      ]
+    }
+  ]
+}

@@ -2,6 +2,12 @@
 
 模拟售后业务的数据、共享契约、应用配置、SQLite 存储与源码打包工具。数据和契约预览命令只读取样例，不执行退款或启动 Agent。
 
+版本化政策位于 `data/business/v1/policies.json`，共 24 份，涵盖当前规则、品类差异及旧版/未来版对照；来源规格与引用方式见[业务数据说明](data/business/v1/README.md#政策文档与引用)。政策一致性检查：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_policy_data.py
+```
+
 ## 本地轻量环境
 
 使用 Python 3.12 和 uv；应用依赖为 Pydantic、PyYAML、python-dotenv，测试使用 pytest，不需要模型推理或训练依赖。

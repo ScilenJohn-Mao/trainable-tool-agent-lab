@@ -1,0 +1,69 @@
+{
+  "format_version": 1,
+  "versions": [
+    {
+      "policy_version": "mock-policy-v0",
+      "business_time": "2026-08-17T12:00:00+08:00",
+      "effective_from": "2026-08-01T00:00:00+08:00",
+      "effective_to": "2026-09-01T00:00:00+08:00",
+      "currency": "CNY",
+      "amount_unit": "fen",
+      "minor_units_per_major": 100,
+      "rules": {
+        "refund": {
+          "rule_id": "R-REFUND-01",
+          "category": "general_goods",
+          "requires_verified_damage": true,
+          "window_days": 5,
+          "amount": "full_paid_amount",
+          "max_per_order": 1
+        },
+        "delay_coupon": {
+          "rule_id": "R-DELAY-01",
+          "category": "general_goods",
+          "minimum_delay_hours": 24,
+          "amount_minor": 300,
+          "max_per_order": 1,
+          "compatible_with_refund": true
+        },
+        "handoff": {
+          "rule_id": "R-HANDOFF-01",
+          "reasons": ["unsupported_category", "outside_refund_window", "unverified_damage", "order_unresolved"]
+        }
+      },
+      "write_actions_requiring_approval": ["request_refund", "issue_coupon", "create_handoff"]
+    },
+    {
+      "policy_version": "mock-policy-v2",
+      "business_time": "2026-10-17T12:00:00+08:00",
+      "effective_from": "2026-10-01T00:00:00+08:00",
+      "effective_to": "2026-11-01T00:00:00+08:00",
+      "currency": "CNY",
+      "amount_unit": "fen",
+      "minor_units_per_major": 100,
+      "rules": {
+        "refund": {
+          "rule_id": "R-REFUND-01",
+          "category": "general_goods",
+          "requires_verified_damage": true,
+          "window_days": 10,
+          "amount": "full_paid_amount",
+          "max_per_order": 1
+        },
+        "delay_coupon": {
+          "rule_id": "R-DELAY-01",
+          "category": "general_goods",
+          "minimum_delay_hours": 24,
+          "amount_minor": 800,
+          "max_per_order": 1,
+          "compatible_with_refund": true
+        },
+        "handoff": {
+          "rule_id": "R-HANDOFF-01",
+          "reasons": ["unsupported_category", "outside_refund_window", "unverified_damage", "order_unresolved"]
+        }
+      },
+      "write_actions_requiring_approval": ["request_refund", "issue_coupon", "create_handoff"]
+    }
+  ]
+}
