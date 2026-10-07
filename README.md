@@ -75,6 +75,19 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_business_rules.py
 ```
 
+## 受保护业务写入
+
+`BusinessService` 重新读取任务、提案、批准和预先持久化的操作键，核对归属、参数、
+版本、有效期和业务规则，将确认消费、订单变更与操作账本同事务提交。
+Python 接口及重复写入行为见[业务执行说明](docs/business_service.md)。
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_business_transactions.py
+```
+
+测试在隔离库通过存储接口准备合成确认，验证真实模拟业务写入；不是完整用户确认
+入口或工具调用演示。
+
 ## 共享契约预览
 
 [契约说明](docs/contracts.md)定义任务/尝试身份、七个状态、退款/补偿/转人工参数、提案快照、批准或拒绝、运行时执行上下文和事件。

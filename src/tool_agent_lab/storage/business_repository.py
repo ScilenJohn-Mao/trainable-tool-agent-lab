@@ -94,6 +94,17 @@ class BusinessRepository:
         ).fetchone()
         return _operation(row) if row is not None else None
 
+    def get_successful_handoff(
+        self, task_id: str, owner_id: str, order_id: str | None, reason: str
+    ) -> Operation | None:
+        row = self.connection.execute(
+            """SELECT * FROM operations WHERE task_id = ? AND owner_id = ?
+                AND order_id IS ? AND action = 'create_handoff' AND status = 'succeeded'
+                AND json_extract(result_json, '$.reason') = ? LIMIT 1""",
+            (task_id, owner_id, order_id, reason),
+        ).fetchone()
+        return _operation(row) if row is not None else None
+
     def finish_operation(
         self, operation_key: str, owner_id: str, *, status: Literal["succeeded", "failed"],
         committed_at: datetime | None, result: JsonValue,

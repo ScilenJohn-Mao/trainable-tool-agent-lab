@@ -102,6 +102,25 @@ class TaskRepository:
         values["parameters"] = json.loads(values.pop("parameters_json"))
         return ActionProposal.model_validate(values)
 
+    def get_current_proposal(
+        self, task_id: str, attempt_id: str, owner_id: str
+    ) -> ActionProposal | None:
+        """Return the last appended proposal, considering only each ID's latest version."""
+        row = self.connection.execute(
+            """SELECT p.proposal_id, p.proposal_version FROM proposals p
+                JOIN tasks t ON t.task_id = p.task_id
+                WHERE p.task_id = ? AND p.attempt_id = ? AND t.owner_id = ?
+                    AND p.proposal_version = (
+                        SELECT MAX(v.proposal_version) FROM proposals v
+                        WHERE v.proposal_id = p.proposal_id
+                    )
+                ORDER BY p.rowid DESC LIMIT 1""",
+            (task_id, attempt_id, owner_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return self.get_proposal(task_id, row["proposal_id"], owner_id, version=row["proposal_version"])
+
     def add_approval(self, approval: Approval) -> None:
         require_transaction(self.connection)
         proposal = approval.proposal
