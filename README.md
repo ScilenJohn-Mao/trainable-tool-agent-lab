@@ -112,6 +112,19 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_schem
 
 预览使用 ORD-1001 的 12900 分退款样例，验证 8 种记录的 JSON 往返。确认记录为合成样例，输出 `approval_service: not_run`、`business_execution: not_run`；命令只校验结构，不调用确认服务、执行退款或写入数据库。
 
+## 工具契约与 Schema 导出
+
+七工具的模型参数、带 call_id 的结构化成功/错误结果及 JSON Schema 位于
+`tool_agent_lab.tools.contracts`。写工具复用业务动作参数，成功结果要求已提交账本；
+不确定错误保留原操作键。接口见[工具契约说明](docs/tool_contracts.md)。
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.tools.contracts
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_tool_contracts.py
+```
+
+导出命令只输出七工具的 schema，不启动 MCP 会话或调用工具。
+
 ## 源码打包
 
 激活 Python 3.12 或直接指定其路径即可；脚本仅用标准库，不要求安装项目、uv 或 Git。
