@@ -21,7 +21,10 @@ from tool_agent_lab.storage.database import connect, initialize_database, transa
 from tool_agent_lab.storage.task_repository import TaskRepository
 
 
-def prepare(path: Path, context: ExecutionContext, proposal: ActionProposal, *, decision: str = "approved") -> None:
+def prepare(
+    path: Path, context: ExecutionContext, proposal: ActionProposal, *,
+    decision: str = "approved", persist_operation: bool = True,
+) -> None:
     """Persist synthetic confirmation and pending records to exercise the business layer."""
     binding = context.write_binding
     with transaction(path) as connection:
@@ -34,6 +37,8 @@ def prepare(path: Path, context: ExecutionContext, proposal: ActionProposal, *, 
             ),
             proposal=proposal, owner_id=context.owner_id, decided_at=context.business_time,
         ))
+        if not persist_operation:
+            return
         action = proposal.parameters
         BusinessRepository(connection).add_operation(Operation(
             operation_key=binding.operation_key, task_id=context.task_id,
@@ -345,3 +350,231 @@ def test_handoff_preserves_money_and_deduplicates_same_issue(case: dict, unresol
     proposal, context = revised(case, handoff, suffix="repeat")
     prepare(case["path"], context, proposal)
     refuse(case, handoff, context, "business_action_already_committed", clarification_attempted=unresolved)
+
+
+def test_public_prepare_persists_before_call_and_reuses_pending_key(case: dict) -> None:
+    context, proposal = case["context"], case["proposal"]
+    prepare(case["path"], context, proposal, persist_operation=False)
+    before = snapshot(case)
+    service = case["service"]
+    pending = service.prepare(proposal.parameters, context)
+    assert pending.status == "pending"
+    assert pending.operation_key == context.write_binding.operation_key
+    assert snapshot(case)[:2] == before[:2]
+    read_context = ExecutionContext.model_validate(context.model_dump() | {"write_binding": None})
+    fresh_service = BusinessService(case["path"], service.rules)
+    assert fresh_service.get_operation(pending.operation_key, read_context) == pending
+    later = ExecutionContext.model_validate(context.model_dump() | {
+        "business_time": context.business_time + timedelta(minutes=1),
+    })
+    assert fresh_service.prepare(proposal.parameters, later) == pending
+    assert len(snapshot(case)[2]) == 1
+    result = fresh_service.execute(proposal.parameters, later)
+    assert result.status == "succeeded"
+    assert result.amount_minor == 12900
+    assert fresh_service.get_operation(pending.operation_key, read_context) == result
+
+
+@pytest.mark.parametrize("terminal", ["pending", "succeeded", "failed"])
+def test_same_confirmation_cannot_switch_operation_key(case: dict, terminal: str) -> None:
+    context, proposal = case["context"], case["proposal"]
+    prepare(case["path"], context, proposal, persist_operation=False)
+    service = case["service"]
+    original = service.prepare(proposal.parameters, context)
+    if terminal == "succeeded":
+        original = service.execute(proposal.parameters, context)
+    elif terminal == "failed":
+        with transaction(case["path"]) as connection:
+            BusinessRepository(connection).finish_operation(
+                original.operation_key, context.owner_id, status="failed",
+                committed_at=None, result={"code": "explicit_failure"},
+            )
+        original = service.get_operation(original.operation_key, context)
+    before = snapshot(case)
+    changed = ExecutionContext.model_validate(context.model_dump() | {
+        "write_binding": context.write_binding.model_dump() | {"operation_key": "changed-key"},
+    })
+    with pytest.raises(BusinessError, match="approval_already_bound"):
+        service.prepare(proposal.parameters, changed)
+    assert snapshot(case) == before
+    assert service.prepare(proposal.parameters, context) == original
+
+
+def test_same_key_cannot_bind_a_different_confirmed_proposal(case: dict) -> None:
+    context, proposal = case["context"], case["proposal"]
+    prepare(case["path"], context, proposal, persist_operation=False)
+    service = case["service"]
+    original = service.prepare(proposal.parameters, context)
+    revised_proposal, revised_context = revised(case, proposal.parameters)
+    revised_context = ExecutionContext.model_validate(revised_context.model_dump() | {
+        "write_binding": revised_context.write_binding.model_dump() | {"operation_key": original.operation_key},
+    })
+    prepare(case["path"], revised_context, revised_proposal, persist_operation=False)
+    before = snapshot(case)
+    with pytest.raises(BusinessError, match="operation_binding_mismatch"):
+        service.prepare(proposal.parameters, revised_context)
+    assert snapshot(case) == before
+    assert service.get_operation(original.operation_key, context) == original
+
+
+@pytest.mark.parametrize("problem,code", [
+    ("rejected", "confirmation_required"),
+    ("changed_amount", "proposal_mismatch"),
+    ("expired", "proposal_expired"),
+    ("wrong_amount", "amount_mismatch"),
+])
+def test_prepare_refuses_invalid_authorization_or_business(case: dict, problem: str, code: str) -> None:
+    context, proposal = case["context"], case["proposal"]
+    if problem == "expired":
+        proposal = ActionProposal.model_validate(proposal.model_dump() | {
+            "created_at": context.business_time - timedelta(minutes=2),
+            "expires_at": context.business_time,
+        })
+    if problem == "wrong_amount":
+        proposal = ActionProposal.model_validate(proposal.model_dump() | {
+            "parameters": proposal.parameters.model_dump() | {"amount_minor": 12000},
+        })
+    prepare(case["path"], context, proposal, persist_operation=False,
+            decision="rejected" if problem == "rejected" else "approved")
+    action = proposal.parameters
+    if problem == "changed_amount":
+        action = type(action).model_validate(action.model_dump() | {"amount_minor": 12000})
+    before = snapshot(case)
+    with pytest.raises(BusinessError, match=code):
+        case["service"].prepare(action, context)
+    assert snapshot(case) == before
+
+
+@pytest.mark.parametrize("change,code", [
+    ("damage", "unverified_damage"),
+    ("cancel", "task_not_executable"),
+    ("proposal", "proposal_not_current"),
+])
+def test_execute_rechecks_state_after_prepare(case: dict, change: str, code: str) -> None:
+    context, proposal = case["context"], case["proposal"]
+    prepare(case["path"], context, proposal, persist_operation=False)
+    case["service"].prepare(proposal.parameters, context)
+    with transaction(case["path"]) as connection:
+        if change == "damage":
+            connection.execute("UPDATE orders SET damage_verified = 0 WHERE order_id = 'ORD-1001'")
+        elif change == "cancel":
+            TaskRepository(connection).set_status(context.task_id, context.owner_id, TaskStatus.CANCELLED)
+        else:
+            TaskRepository(connection).add_proposal(ActionProposal.model_validate(
+                proposal.model_dump() | {"proposal_version": 2},
+            ), context.owner_id)
+    refuse(case, proposal.parameters, context, code)
+
+
+def test_prepare_insert_failure_rolls_back_key_and_preserves_confirmation(case: dict, monkeypatch) -> None:
+    context, proposal = case["context"], case["proposal"]
+    prepare(case["path"], context, proposal, persist_operation=False)
+    before = snapshot(case)
+    original = BusinessRepository.add_operation
+
+    def fail(self, operation):
+        original(self, operation)
+        assert self.get_operation(operation.operation_key, operation.owner_id) is not None
+        raise RuntimeError("prepare interrupted")
+
+    monkeypatch.setattr(BusinessRepository, "add_operation", fail)
+    with pytest.raises(RuntimeError, match="prepare interrupted"):
+        case["service"].prepare(proposal.parameters, context)
+    assert snapshot(case) == before
+
+
+def test_query_is_owned_and_readable_after_cancel_without_write_binding(case: dict) -> None:
+    context, proposal = case["context"], case["proposal"]
+    prepare(case["path"], context, proposal, persist_operation=False)
+    service = case["service"]
+    pending = service.prepare(proposal.parameters, context)
+    result = service.execute(proposal.parameters, context)
+    foreign_task = Task(task_id="foreign-task", owner_id="foreign-owner",
+                        user_message="other ticket", current_attempt_id="foreign-attempt",
+                        created_at=context.business_time)
+    foreign_attempt = Attempt(task_id=foreign_task.task_id, owner_id=foreign_task.owner_id,
+                              attempt_id="foreign-attempt", thread_id="foreign-thread",
+                              model_version="manual", config_version="contract-preview-v1",
+                              created_at=context.business_time)
+    with transaction(case["path"]) as connection:
+        tasks = TaskRepository(connection)
+        tasks.add_task(foreign_task)
+        tasks.add_attempt(foreign_attempt)
+        tasks.set_status(context.task_id, context.owner_id, TaskStatus.CANCELLED)
+    foreign_context = ExecutionContext(**{
+        name: getattr(foreign_attempt, name) for name in ExecutionContext.model_fields
+        if name not in ("business_time", "write_binding")
+    }, business_time=context.business_time)
+    assert service.get_operation(pending.operation_key, foreign_context) is None
+    assert service.get_operation("unknown-key", context) is None
+    read_context = ExecutionContext.model_validate(context.model_dump() | {
+        "write_binding": None, "business_time": context.business_time + timedelta(days=30),
+    })
+    before = snapshot(case)
+    assert service.get_operation(pending.operation_key, read_context) == result
+    assert snapshot(case) == before
+    changed_identity = ExecutionContext.model_validate(read_context.model_dump() | {"thread_id": "wrong-thread"})
+    with pytest.raises(BusinessError, match="attempt_identity_mismatch"):
+        service.get_operation(pending.operation_key, changed_identity)
+
+
+@pytest.mark.parametrize("action_name", ["request_refund", "issue_coupon", "create_handoff"])
+def test_public_preparation_flow_deduplicates_new_key_and_confirmation(case: dict, action_name: str) -> None:
+    service = case["service"]
+    if action_name == "request_refund":
+        action = case["proposal"].parameters
+    elif action_name == "issue_coupon":
+        action = CouponAction(order_id="ORD-1002", amount_minor=500, reason="delayed delivery",
+                              policy_refs=(service.rules.reference(action_name),))
+    else:
+        action = HandoffAction(order_id="ORD-1004", reason="unsupported_category",
+                               summary="manual review", policy_refs=(service.rules.reference(action_name),))
+    proposal, context = revised(case, action, suffix="first")
+    prepare(case["path"], context, proposal, persist_operation=False)
+    pending = service.prepare(action, context)
+    assert pending.status == "pending"
+    result = service.execute(action, context)
+    assert service.get_operation(pending.operation_key, context) == result
+    other_proposal, other_context = revised(case, action, suffix="duplicate")
+    prepare(case["path"], other_context, other_proposal, persist_operation=False)
+    before = snapshot(case)
+    with pytest.raises(BusinessError, match="business_action_already_committed"):
+        service.prepare(action, other_context)
+    assert snapshot(case) == before
+    assert service.get_operation(other_context.write_binding.operation_key, context) is None
+    assert len(snapshot(case)[2]) == 1
+
+
+def test_prepare_cannot_reuse_another_owners_key(case: dict) -> None:
+    context, proposal = case["context"], case["proposal"]
+    foreign_context = ExecutionContext.model_validate(context.model_dump() | {
+        "task_id": "foreign-task", "attempt_id": "foreign-attempt",
+        "owner_id": "foreign-owner", "thread_id": "foreign-thread",
+        "write_binding": context.write_binding.model_dump() | {
+            "proposal_id": "foreign-proposal", "approval_request_id": "foreign-approval",
+        },
+    })
+    foreign_proposal = ActionProposal.model_validate(proposal.model_dump() | {
+        "task_id": foreign_context.task_id, "attempt_id": foreign_context.attempt_id,
+        "proposal_id": foreign_context.write_binding.proposal_id,
+        "parameters": proposal.parameters.model_dump() | {"order_id": "foreign-order"},
+    })
+    with transaction(case["path"]) as connection:
+        business = BusinessRepository(connection)
+        business.add_order(Order.model_validate(business.get_order("ORD-1001", context.owner_id).model_dump() | {
+            "order_id": "foreign-order", "owner_id": foreign_context.owner_id,
+        }))
+        tasks = TaskRepository(connection)
+        tasks.add_task(Task(task_id=foreign_context.task_id, owner_id=foreign_context.owner_id,
+                            current_attempt_id=foreign_context.attempt_id, user_message="other ticket",
+                            status="waiting_approval", created_at=context.business_time))
+        tasks.add_attempt(Attempt(**{
+            name: getattr(foreign_context, name) for name in ("task_id", "attempt_id", "owner_id", "thread_id", "model_version", "config_version")
+        }, status="waiting_approval", created_at=context.business_time))
+    prepare(case["path"], foreign_context, foreign_proposal)
+    prepare(case["path"], context, proposal, persist_operation=False)
+    before = snapshot(case)
+    with pytest.raises(BusinessError, match="operation_key_conflict"):
+        case["service"].prepare(proposal.parameters, context)
+    assert snapshot(case) == before
+    assert case["service"].get_operation(context.write_binding.operation_key, context) is None

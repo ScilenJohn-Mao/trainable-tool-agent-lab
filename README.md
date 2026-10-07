@@ -77,8 +77,10 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 
 ## 受保护业务写入
 
-`BusinessService` 重新读取任务、提案、批准和预先持久化的操作键，核对归属、参数、
-版本、有效期和业务规则，将确认消费、订单变更与操作账本同事务提交。
+`BusinessService.prepare` 在工具调用前持久化 pending 操作键，重复准备复用原记录；
+`execute` 重新读取任务、提案、批准和操作键，核对归属、参数、版本、有效期和业务规则，
+将确认消费、订单变更与操作账本同事务提交。`get_operation` 按原键查询带归属的真实
+账本；换键或新批准不能重复退款/补偿。
 Python 接口及重复写入行为见[业务执行说明](docs/business_service.md)。
 
 ```powershell

@@ -84,6 +84,19 @@ class BusinessRepository:
         ).fetchone()
         return _operation(row) if row is not None else None
 
+    def operation_key_exists(self, operation_key: str) -> bool:
+        """Check a global key collision without exposing another owner's record."""
+        return self.connection.execute(
+            "SELECT 1 FROM operations WHERE operation_key = ?", (operation_key,)
+        ).fetchone() is not None
+
+    def get_operation_for_approval(self, request_id: str, owner_id: str) -> Operation | None:
+        row = self.connection.execute(
+            "SELECT * FROM operations WHERE approval_request_id = ? AND owner_id = ?",
+            (request_id, owner_id),
+        ).fetchone()
+        return _operation(row) if row is not None else None
+
     def get_successful_operation(
         self, order_id: str, action: str, owner_id: str
     ) -> Operation | None:

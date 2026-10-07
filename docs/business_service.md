@@ -9,9 +9,34 @@
 上下文并用作授权。`clarification_attempted` 也是运行时事实，仅在实际完成澄清后
 设置；它不是工具的模型参数。订单无法确定且没有澄清事实时，转人工也会被拒绝。
 
-调用前必须已通过存储接口保存任务、当前尝试、提案、完整批准快照及 pending
-操作记录。执行服务不创建确认、不自动批准、不生成新操作键，也不隐式初始化库。
-没有准备操作记录时返回 `BusinessError("operation_not_prepared")`。
+调用前必须已保存任务、当前尝试、提案及完整批准快照。可信运行时为
+`context.write_binding` 分配操作键，再调用 `service.prepare(action, context)`。
+准备接口复用执行的授权与业务规则检查，在独立事务中保存 pending 记录；返回前
+已经提交。此时不消费确认、不改变订单、不创建转人工结果。随后才能调用 execute。
+服务不创建确认、不自动批准、不生成新操作键，也不隐式初始化库。
+没有准备操作记录就执行时返回 `BusinessError("operation_not_prepared")`。
+
+```python
+# action and context are supplied by the trusted application runtime.
+pending = service.prepare(action, context)
+if pending.status == "pending":
+    result = service.execute(action, context)
+else:
+    result = pending
+stored = service.get_operation(pending.operation_key, context)
+```
+
+同键、同绑定重复准备会复用原记录及创建时间，不重置状态。原记录已成功或明确
+失败时，prepare 返回其终态，不能把 failed 当成新的 pending 执行。相同批准换键
+返回 `approval_already_bound`，必须沿用已保存的原键；同键换参数或批准返回
+`operation_binding_mismatch`。其他归属占用同键时返回 `operation_key_conflict`，
+不暴露其记录。新批准、新键也不能绕过已提交退款/补偿或转人工的业务去重。
+
+`service.get_operation(operation_key, context)` 核对任务归属及完整尝试身份后，
+返回该归属下的账本记录；未知或其他归属的键均返回 None。查询不需要 write_binding
+或当前执行状态，也不要求政策仍有效，取消后的成功结果仍可读。它不消费确认或写库。
+执行响应不确定时应按原键查询；pending 表示尚无已提交终态，不能自行改键或将超时
+视为未执行。查询本身不会重试工具或恢复 worker。
 
 执行会重新读取并核对：
 
@@ -21,6 +46,7 @@
 - 操作键所绑定的任务、尝试、订单、动作、金额、币种和批准请求。
 - 订单归属、最新业务状态、政策有效期、引用、金额与动作资格。
 
+prepare 与 execute 分别打开事务，执行时会再次核对授权和最新业务状态。
 确认消费、订单金额变更和操作账本完成使用同一个 SQLite BEGIN IMMEDIATE 事务。
 转人工不改变金额，账本保存原因和摘要。退款与补偿分别提交，已完成退款不因后续
 补偿失败而撤回。业务拒绝抛出具有 `.code` 的 `BusinessError`，保留原 pending
