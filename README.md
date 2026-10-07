@@ -73,6 +73,19 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 
 第一条命令只读取应用配置指向的 `business_data_dir`，检查金额、引用和初始退款账本，输出手工期望及 `business_execution: not_run`；不会创建数据库、执行退款或调用模型。每个样例须独立重置初始状态，期望答案不提供给模型。
 
+## 政策读取与检索
+
+`PolicyCatalog` 导入版本化政策并按 ID/版本/section 读取原文；`PolicySearch` 按
+固定业务时间建立内存 BM25 条款索引，返回带版本、有效期和位置的证据。
+支持品类、版本与条数限制，中文采用字符及相邻双字切分，不需要模型或额外依赖。
+接口、完整文档读取与历史版本语义见[政策说明](docs/policies.md)。
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.knowledge.search search "延迟补偿券固定500分" --category general_goods --limit 3
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.knowledge.search read P-DELAY-AMOUNT mock-policy-v1 --section amount
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_policy_search.py
+```
+
 ## 业务规则资格检查
 
 `BusinessRules` 按模拟规格判断退款、延迟补偿和转人工的资格与金额，返回结构化原因；默认使用固定业务时间，检查政策生效区间及引用。它只做纯规则判断，不执行退款、消费确认或写数据库。调用示例见[业务规则说明](docs/business_rules.md)。
