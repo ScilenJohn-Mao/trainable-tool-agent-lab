@@ -50,6 +50,12 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_datab
 
 默认初始化配置中的 `app_db_path`；`--database` 指定的相对路径以当前工作目录为基准。命令创建父目录和空应用表，输出绝对路径及 schema 版本，重复运行保留已有数据。checkpoint 数据库单独管理。表、事务、唯一约束及 Python 接口见[存储说明](docs/storage.md)。
 
+`TaskRepository`、`BusinessRepository`、`EventRepository` 提供带归属的读取、版本化提案/确认、订单与账本写入、事件追加及游标续读，复用调用方事务。验证这些存储接口：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_repositories.py
+```
+
 ## 最小业务数据与预期结果预览
 
 [业务规格](data/business/v1/README.md) 包含 4 个订单、1 笔附确认快照的历史退款和 5 个样例，覆盖规则退款、退款加补偿、核对不确定结果、澄清/转人工四类任务。固定业务时间为 `2026-09-17T12:00:00+08:00`，CNY 金额使用整数分。

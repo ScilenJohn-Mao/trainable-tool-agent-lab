@@ -14,6 +14,12 @@ SCHEMA_VERSION = 1
 INITIAL_MIGRATION = Path(__file__).with_name("migrations") / "001_initial.sql"
 
 
+def require_transaction(connection: sqlite3.Connection) -> None:
+    """Prevent repository writes from silently using SQLite autocommit."""
+    if not connection.in_transaction:
+        raise RuntimeError("Repository writes require an explicit transaction")
+
+
 @contextmanager
 def connect(database_path: str | Path) -> Iterator[sqlite3.Connection]:
     """Open a foreign-key-enabled connection; close it on exit without implicit commits."""
