@@ -35,6 +35,7 @@ required_files = [
   "src/tool_agent_lab/knowledge/search.py", "docs/policies.md",
   "scripts/check_business_data.py", "data/business/v1/README.md",
   "scripts/seed_demo.py", "docs/demo_database.md",
+  "scripts/demo_business.py", "docs/business_demo.md",
   "data/business/v1/spec.json", "data/business/v1/orders.json",
   "data/business/v1/operations.json", "data/business/v1/scenarios.json",
   "data/business/v1/policies.json", "data/business/v1/policy_specs.json",
