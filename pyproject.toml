@@ -5,6 +5,7 @@ description = "A trainable after-sales tool agent workbench"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "mcp>=1.26,<2",
     "pydantic>=2.11,<3",
     "python-dotenv>=1.1,<2",
     "PyYAML>=6.0.2,<7",

@@ -144,6 +144,18 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_tool_
 
 导出命令只输出七工具的 schema，不启动 MCP 会话或调用工具。
 
+## 本地 MCP stdio
+
+客户端通过真实子进程握手、列出七工具并调用四个只读工具，保留原始和类型化结果。
+本地身份在启动时绑定；三种写工具在缺少可信执行绑定时返回结构化拒绝。
+安装、Windows JSON 输入和 Python 接口见[MCP 使用说明](docs/mcp.md)。
+
+```powershell
+uv sync --locked --cache-dir .uv-cache
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.tools.client list
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_mcp_stdio.py
+```
+
 ## 源码打包
 
 激活 Python 3.12 或直接指定其路径即可；脚本仅用标准库，不要求安装项目、uv 或 Git。
