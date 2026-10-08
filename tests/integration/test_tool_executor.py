@@ -1,10 +1,15 @@
 """Verify runtime bindings through real MCP writes and persisted authorization."""
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 import pytest
 
+from tool_agent_lab.business.service import BusinessError
+from tool_agent_lab.schemas.actions import WriteBinding
+from tool_agent_lab.schemas.tasks import AttemptIdentity, TaskCreate
 from tool_agent_lab.storage.business_repository import BusinessRepository
 from tool_agent_lab.storage.database import connect, transaction
 from tool_agent_lab.storage.task_repository import TaskRepository
@@ -87,6 +92,130 @@ def test_unconfirmed_rejected_or_changed_parameters_do_not_write(case, stage, co
     with connect(path) as connection:
         assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
         assert BusinessRepository(connection).get_order("ORD-1001", identity.owner_id).refunded_amount_minor == 0
+        if stage not in ("no_proposal", "no_approval"):
+            assert TaskRepository(connection).approval_consumed_at(identity.task_id, "approval-1", identity.owner_id) is None
+
+
+@pytest.mark.parametrize("case_id", ["refund-amount-below", "refund-amount-above", "policy-old-reference"])
+def test_operator_approval_cannot_override_independent_business_boundaries(case, case_id):
+    path, rules, tasks, identity, executor = case
+    records = [json.loads(line) for line in
+               (DATA.parents[1] / "cases/boundary.jsonl").read_text(encoding="utf-8").splitlines()]
+    boundary = next(record for record in records if record["case_id"] == case_id)
+    values = boundary["input"]["action"]
+    proposal = executor.propose("request_refund", values)
+    approval = approve(case, proposal)
+    assert approval.request.decision == "approved"
+    result = call(executor, "request_refund", values)
+    assert result.error.code == boundary["expected"]["code"]
+    with connect(path) as connection:
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
+        assert BusinessRepository(connection).get_order("ORD-1001", identity.owner_id).refunded_amount_minor == 0
+        assert TaskRepository(connection).approval_consumed_at(identity.task_id, "approval-1", identity.owner_id) is None
+
+
+def bound_context(executor, proposal, request_id, operation_key):
+    return executor.context.model_copy(update={"write_binding": WriteBinding(
+        proposal_id=proposal.proposal_id, proposal_version=proposal.proposal_version,
+        approval_request_id=request_id, operation_key=operation_key,
+    )})
+
+
+@pytest.mark.parametrize("problem,code", [("policy", "policy_not_active"), ("proposal", "proposal_expired")])
+def test_expired_authorization_before_prepare_never_creates_an_operation(case, problem, code):
+    path, rules, tasks, identity, executor = case
+    values = arguments(rules)
+    expires = rules.business_time + timedelta(minutes=1) if problem == "proposal" else None
+    proposal = executor.propose("request_refund", values, expires_at=expires)
+    approve(case, proposal)
+    now = expires if expires is not None else datetime.fromisoformat("2026-10-01T00:00:00+08:00")
+    aged = ToolExecutor(path, rules, identity, data_dir=DATA, business_time=now)
+    assert call(aged, "request_refund", values).error.code == code
+    with connect(path) as connection:
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
+        assert BusinessRepository(connection).get_order("ORD-1001", identity.owner_id).refunded_amount_minor == 0
+        assert TaskRepository(connection).approval_consumed_at(identity.task_id, "approval-1", identity.owner_id) is None
+
+
+@pytest.mark.parametrize("problem,code", [("policy", "policy_not_active"), ("proposal", "proposal_expired")])
+def test_real_mcp_rechecks_expiry_after_a_valid_public_preparation(case, problem, code):
+    path, rules, tasks, identity, executor = case
+    values = arguments(rules)
+    expires = rules.business_time + timedelta(minutes=1) if problem == "proposal" else None
+    proposal = executor.propose("request_refund", values, expires_at=expires)
+    approve(case, proposal)
+    context = bound_context(executor, proposal, "approval-1", "prepared-refund-key")
+    pending = executor.business.prepare(TOOL_CONTRACTS["request_refund"].parse_arguments(values), context)
+    assert pending.status == "pending"
+    now = expires if expires is not None else datetime.fromisoformat("2026-10-01T00:00:00+08:00")
+    aged = context.model_copy(update={"business_time": now})
+
+    async def run():
+        parameters = local_server_parameters(database=path, data_dir=DATA, owner_id=identity.owner_id,
+                                             execution_context=aged)
+        async with open_tool_session(parameters) as client:
+            reply = await client.call_tool("request_refund", values, call_id="expired-at-execution")
+            assert_reply(reply, "expired-at-execution", error=code)
+            lookup = await client.call_tool("get_operation", {"operation_key": pending.operation_key}, call_id="pending-query")
+            assert_reply(lookup, "pending-query")
+            assert lookup.result.data.operation.model_dump(mode="json") == pending.model_dump(mode="json")
+    asyncio.run(run())
+    with connect(path) as connection:
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
+        assert BusinessRepository(connection).get_order("ORD-1001", identity.owner_id).refunded_amount_minor == 0
+        assert TaskRepository(connection).approval_consumed_at(identity.task_id, "approval-1", identity.owner_id) is None
+
+
+def test_same_approval_key_change_is_rejected_before_and_after_real_refund(case):
+    path, rules, tasks, identity, executor = case
+    values = arguments(rules)
+    action = TOOL_CONTRACTS["request_refund"].parse_arguments(values)
+    proposal = executor.propose("request_refund", values)
+    approve(case, proposal)
+    original = bound_context(executor, proposal, "approval-1", "original-refund-key")
+    switched = bound_context(executor, proposal, "approval-1", "switched-refund-key")
+    pending = executor.business.prepare(action, original)
+    with pytest.raises(BusinessError, match="approval_already_bound"):
+        executor.business.prepare(action, switched)
+    assert executor.business.get_operation(pending.operation_key, original) == pending
+    result = call(executor, "request_refund", values)
+    assert result.data.operation_key == pending.operation_key
+    assert result.data.amount_minor == 12900
+    with pytest.raises(BusinessError, match="approval_already_bound"):
+        executor.business.prepare(action, switched)
+    assert executor.business.get_operation(switched.write_binding.operation_key, switched) is None
+    assert call(executor, "request_refund", values, "same-key-retry").data == result.data
+    with connect(path) as connection:
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
+        assert BusinessRepository(connection).get_order("ORD-1001", identity.owner_id).refunded_amount_minor == 12900
+        assert TaskRepository(connection).approval_consumed_at(identity.task_id, "approval-1", identity.owner_id) == rules.business_time
+
+
+def test_new_task_new_approval_and_new_key_cannot_refund_the_same_order_twice(case):
+    path, rules, tasks, identity, executor = case
+    values = arguments(rules)
+    approve(case, executor.propose("request_refund", values))
+    original = call(executor, "request_refund", values)
+    assert original.status == "ok" and original.data.amount_minor == 12900
+    task = tasks.create(TaskCreate(user_message="repeat refund request", order_id="ORD-1001"), owner_id=identity.owner_id)
+    attempt = tasks.start(task.task_id, owner_id=identity.owner_id)
+    second_identity = AttemptIdentity(**{field: getattr(attempt, field) for field in AttemptIdentity.model_fields})
+    second = ToolExecutor(path, rules, second_identity, data_dir=DATA)
+    proposal = second.propose("request_refund", values)
+    approve((path, rules, tasks, second_identity, second), proposal, request_id="new-task-approval")
+    changed = bound_context(second, proposal, "new-task-approval", "new-task-refund-key")
+    with pytest.raises(BusinessError, match="business_action_already_committed"):
+        second.business.prepare(TOOL_CONTRACTS["request_refund"].parse_arguments(values), changed)
+    assert call(second, "request_refund", values, "new-task-call").error.code == "business_action_already_committed"
+    lookup = call(executor, "get_operation", {"operation_key": original.data.operation_key}, "original-query")
+    assert lookup.data.operation.model_dump(mode="json") == original.data.model_dump(mode="json")
+    with connect(path) as connection:
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
+        business = BusinessRepository(connection)
+        assert business.get_operation(changed.write_binding.operation_key, identity.owner_id) is None
+        order = business.get_order("ORD-1001", identity.owner_id)
+        assert order.refunded_amount_minor == 12900 and order.coupon_amount_minor == 0
+        assert TaskRepository(connection).approval_consumed_at(task.task_id, "new-task-approval", identity.owner_id) is None
 
 
 def test_changed_proposal_requires_new_confirmation(case):
