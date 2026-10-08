@@ -10,7 +10,7 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_polic
 
 ## 本地轻量环境
 
-使用 Python 3.12 和 uv；应用依赖为 Pydantic、PyYAML、python-dotenv，测试使用 pytest，不需要模型推理或训练依赖。
+使用 Python 3.12 和 uv；应用依赖为 FastAPI、Uvicorn、MCP、Pydantic、PyYAML、python-dotenv，测试使用 pytest 和 HTTPX，不需要模型推理或训练依赖。
 
 ```powershell
 uv sync --locked --cache-dir .uv-cache
@@ -103,6 +103,16 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_approvals.py
+```
+
+## HTTP 任务与确认服务
+
+通过本地 HTTP 创建工单、查询任务/列表和完整当前提案，并记录操作者批准或拒绝。
+身份由服务端配置绑定，确认复用同一 ApprovalService，不直接执行业务。
+启动、请求字段、错误码和使用示例见[HTTP 接口说明](docs/http_api.md)。
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 ```
 
 ## 受保护业务写入

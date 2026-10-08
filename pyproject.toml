@@ -5,10 +5,12 @@ description = "A trainable after-sales tool agent workbench"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "fastapi>=0.115,<1",
     "mcp>=1.26,<2",
     "pydantic>=2.11,<3",
     "python-dotenv>=1.1,<2",
     "PyYAML>=6.0.2,<7",
+    "uvicorn>=0.30,<1",
 ]
 
 [build-system]
@@ -16,7 +18,10 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["pytest>=8.4,<9"]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8.4,<9",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tool_agent_lab"]
