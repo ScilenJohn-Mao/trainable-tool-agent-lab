@@ -26,6 +26,8 @@ from tool_agent_lab.storage.database import connect, initialize_database, transa
 from tool_agent_lab.tools.client import ToolClient, local_server_parameters, open_tool_session
 from tool_agent_lab.tools.contracts import ToolFailure, tool_definitions
 
+from mcp_support import assert_reply
+
 DATA = PROJECT_ROOT / "data/business/v1"
 
 
@@ -57,18 +59,6 @@ def case(tmp_path: Path) -> dict:
     return {"path": path, "rules": rules, "action": action, "context": context, "business": business,
             "parameters": local_server_parameters(database=path, data_dir=DATA, cwd=tmp_path)}
 
-
-def assert_reply(reply, call_id: str, *, error: str | None = None) -> None:
-    assert reply.result.call_id == call_id
-    assert reply.raw.structuredContent == reply.result.model_dump(mode="json")
-    assert len(reply.raw.content) == 1 and reply.raw.content[0].type == "text"
-    assert json.loads(reply.raw.content[0].text) == reply.raw.structuredContent
-    assert reply.raw.isError == (error is not None)
-    if error:
-        assert reply.result.status == "error" and reply.result.error.code == error
-        assert reply.result.error.outcome == "not_committed"
-    else:
-        assert reply.result.status == "ok"
 
 
 def test_real_handshake_catalog_and_seven_tool_roundtrips_leave_database_unchanged(case: dict) -> None:
