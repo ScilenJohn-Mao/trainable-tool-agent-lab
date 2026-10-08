@@ -62,6 +62,15 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_datab
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_repositories.py
 ```
 
+## 隔离演示库
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/seed_demo.py
+uv run --no-sync --cache-dir .uv-cache python scripts/seed_demo.py --database artifacts/demo/refund-example/app.sqlite3
+```
+
+默认创建独立的 `artifacts/demo/app.sqlite3`，载入四个订单并通过现有确认/业务服务重建历史退款。已有目标与应用/checkpoint 库均拒绝，不覆盖已有业务。路径、历史回执和 HTTP 使用方式见[演示库说明](docs/demo_database.md)。
+
 ## 最小业务数据与预期结果预览
 
 [业务规格](data/business/v1/README.md) 包含 4 个订单、1 笔附确认快照的历史退款和 5 个样例，覆盖规则退款、退款加补偿、核对不确定结果、澄清/转人工四类任务。固定业务时间为 `2026-09-17T12:00:00+08:00`，CNY 金额使用整数分。
