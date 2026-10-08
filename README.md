@@ -173,3 +173,5 @@ python scripts/package_project.py --output-dir artifacts/delivery
 `frontend/` 存在时须同时提供 `package.json` 和 npm 的 `package-lock.json`；`training/art/` 存在时须提供其 `pyproject.toml` 和真实 `uv.lock`。缺失时打包失败。
 
 包内 `PACKAGE_MANIFEST.json` 包含每个源码文件的大小和 SHA-256、内容版本、规则版本及可用的 Git 信息；清单不递归计算自身哈希。上传与解压更新见 [部署说明](deploy/README.md)。
+
+Protected runtime tool calls: see [ToolExecutor usage](docs/executor.md).

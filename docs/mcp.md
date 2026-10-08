@@ -34,9 +34,11 @@ search_policy/read_policy 读取版本化政策。业务读取按启动时配置
 工具参数或 MCP 元数据不能切换身份。get_operation 保留 pending/succeeded/failed 或 null；
 null 不代表业务失败，当前只读入口尚未绑定具体任务/尝试。
 
-当前入口没有可信写执行绑定，request_refund、issue_coupon、create_handoff
-均返回 `execution_context_required`、`not_committed`，不会消费确认或更改业务数据。
-七工具目录和写参数 schema 保留完整，不能将这项拒绝结果理解为已执行退款。
+Standalone CLI sessions have no trusted write binding: request_refund, issue_coupon and
+create_handoff return execution_context_required/not_committed. Runtime callers use
+[ToolExecutor](executor.md) to publish proposals, obtain a human decision through
+ApprovalService, and prepare a persisted operation before the protected MCP call.
+Trusted get_operation sessions validate the complete attempt identity through BusinessService.
 
 默认数据目录、业务库和用户来自应用配置。服务与客户端都支持
 `--database`、`--data-dir`、`--owner-id` 启动选项；它们是本地操作者配置，

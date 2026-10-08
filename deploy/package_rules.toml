@@ -27,6 +27,7 @@ required_files = [
   "src/tool_agent_lab/runtime/__init__.py",
   "src/tool_agent_lab/runtime/task_service.py", "src/tool_agent_lab/runtime/approvals.py",
   "src/tool_agent_lab/tools/__init__.py", "src/tool_agent_lab/tools/contracts.py",
+  "src/tool_agent_lab/tools/executor.py", "docs/executor.md",
   "src/tool_agent_lab/tools/server.py", "src/tool_agent_lab/tools/client.py", "docs/mcp.md",
   "src/tool_agent_lab/knowledge/__init__.py", "src/tool_agent_lab/knowledge/ingest.py",
   "src/tool_agent_lab/knowledge/search.py", "docs/policies.md",
