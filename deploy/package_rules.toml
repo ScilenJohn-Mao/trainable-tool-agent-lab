@@ -39,6 +39,7 @@ required_files = [
   "data/business/v1/spec.json", "data/business/v1/orders.json",
   "data/business/v1/operations.json", "data/business/v1/scenarios.json",
   "data/business/v1/policies.json", "data/business/v1/policy_specs.json",
+  "data/cases/boundary.jsonl", "data/cases/README.md",
   "deploy/package_rules.toml", "deploy/README.md",
 ]
 
