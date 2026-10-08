@@ -1,6 +1,27 @@
 # Trainable Tool Agent Lab
 
-模拟售后业务的数据、共享契约、应用配置、SQLite 存储与源码打包工具。数据和契约预览命令只读取样例，不执行退款或启动 Agent。
+模拟售后业务工作台的轻量后端，提供订单与政策查询、人工提案/确认、受保护的 MCP 退款/补偿/转人工、SQLite 账本和 HTTP 任务接口。使用模拟订单、固定业务时间及 CNY 整数分。
+
+## 快速运行
+
+以下命令从项目根目录执行。先准备下文的 Python 3.12 轻量环境，再运行手工退款演示：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/demo_business.py
+```
+
+脚本每次创建新的隔离业务库，查 ORD-1001、检索并回读政策、展示完整提案。操作者输入 `approved` 或 `rejected`；没有有效输入就不会批准。批准后可核对 stdout JSON：`status=refunded`、`task.status=completed`、`operation.amount_minor=12900`、原键查询与重复调用标志均为 true。12900 分等于 129 元；数据库路径在 `database` 中，业务记录保留在该库。
+
+非交互运行由操作者明确选择本次决定，仍展示提案并经过确认服务：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/demo_business.py --decision approved
+uv run --no-sync --cache-dir .uv-cache python scripts/demo_business.py --decision rejected
+```
+
+拒绝输出 `status=rejected`、`operation=null`，订单金额不变。提案和提示在 stderr，结果 JSON 在 stdout；这是固定订单的手工工具流程。完整命令和错误语义见[退款演示](docs/business_demo.md)。
+
+需要 HTTP 时按下文[HTTP 任务与确认服务](#http-任务与确认服务)启动；源码上传、服务器启动和版本切换见[部署说明](deploy/README.md)。HTTP 提供任务/确认记录，自动模型和 worker 执行流程尚未接入。
 
 版本化政策位于 `data/business/v1/policies.json`，共 24 份，涵盖当前规则、品类差异及旧版/未来版对照；来源规格与引用方式见[业务数据说明](data/business/v1/README.md#政策文档与引用)。政策一致性检查：
 
@@ -12,10 +33,14 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_polic
 
 使用 Python 3.12 和 uv；应用依赖为 FastAPI、Uvicorn、MCP、Pydantic、PyYAML、python-dotenv，测试使用 pytest 和 HTTPX，不需要模型推理或训练依赖。
 
+首次创建或锁文件变化时同步轻量应用环境；已有可用环境直接使用 `--no-sync` 命令：
+
 ```powershell
-uv sync --locked --cache-dir .uv-cache
-uv run --no-sync --cache-dir .uv-cache python -m pytest
+uv sync --locked --python 3.12 --cache-dir .uv-cache
+uv run --no-sync --cache-dir .uv-cache python -c "import sys; print(sys.version); print(sys.executable)"
 ```
+
+应显示 Python 3.12 和本项目 `.venv` 中的解释器。也可将 `--python` 改成已安装 Python 3.12 的绝对路径。此处只同步应用锁文件；应用与训练环境分别管理，真实模型推理、GPU 和 RL 在 Linux 服务器运行。
 
 ## 应用配置与运行目录
 
@@ -112,6 +137,15 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_polic
 uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_business_rules.py
 ```
 
+[32 个独立边界案例](data/cases/README.md)保存完整订单/动作输入及手工期望，覆盖金额、时间、澄清、人工和政策依据。只读核对与受保护写入检查可分别运行：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_boundary_cases.py -p no:cacheprovider
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/test_tool_executor.py -p no:cacheprovider
+```
+
+前者不写数据库，后者使用隔离库和真实 MCP，验证确认、正确金额、期限复核、原键重试、重复写保护和事务回滚。
+
 ## 任务与人工确认
 
 `TaskService` 创建和查询带归属的任务、启动当前尝试并保存版本化提案；
@@ -132,6 +166,33 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 ```
+
+该命令使用当前配置的应用库，启动时初始化空表或保留已有数据；默认初始化不载入演示订单。若要使用隔离的四订单库，在第一个 PowerShell 终端执行：
+
+```powershell
+$demoRuntime = "artifacts/demo/http-$([guid]::NewGuid().ToString('N'))"
+uv run --no-sync --cache-dir .uv-cache python scripts/seed_demo.py --database "$demoRuntime/app.sqlite3"
+if ($LASTEXITCODE -ne 0) { throw 'Demo database initialization failed' }
+$previousRuntime = $env:TTAL_RUNTIME_DIR
+try {
+    $env:TTAL_RUNTIME_DIR = $demoRuntime
+    uv run --no-sync --cache-dir .uv-cache python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
+} finally {
+    $env:TTAL_RUNTIME_DIR = $previousRuntime
+}
+```
+
+先初始化，再指定运行目录，使用默认 `demo-user` 身份；退出服务用 Ctrl+C，finally 恢复该终端先前的变量。已有目标不会被 seed 覆盖。服务运行后，在第二个终端创建并查询任务：
+
+```powershell
+$base = 'http://127.0.0.1:8000'
+$task = Invoke-RestMethod -Method Post -Uri "$base/tasks" -ContentType 'application/json' -Body '{"user_message":"Damaged order, please review","order_id":"ORD-1001"}'
+Invoke-RestMethod -Uri "$base/tasks/$($task.task_id)"
+Invoke-RestMethod -Uri "$base/tasks?status=queued&limit=10"
+Invoke-RestMethod -Uri "$base/tasks/$($task.task_id)/proposal"
+```
+
+创建返回 queued，查询返回同一任务；没有运行时发布提案时 proposal 为 null。浏览器打开 `http://127.0.0.1:8000/docs`，OpenAPI 在 `/openapi.json`。HTTP 批准仅记录决定，退款演示由上面的手工执行器入口完成；实际确认字段和重试语义见[接口说明](docs/http_api.md)。
 
 ## 受保护业务写入
 
@@ -189,9 +250,9 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 激活 Python 3.12 或直接指定其路径即可；脚本仅用标准库，不要求安装项目、uv 或 Git。
 
 ```powershell
-python scripts/package_project.py --dry-run
-python scripts/package_project.py
-python scripts/package_project.py --output-dir artifacts/delivery
+.\.venv\Scripts\python.exe -I -S scripts/package_project.py --dry-run
+.\.venv\Scripts\python.exe -I -S scripts/package_project.py
+.\.venv\Scripts\python.exe -I -S scripts/package_project.py --output-dir artifacts/delivery
 ```
 
 默认在 `artifacts/packages/` 生成源码 ZIP 与 `.zip.sha256`，输出文件数、体积及校验值。预览列出包含文件和排除原因；被排除的目录只列目录本身，不遍历其内部。相对输出目录始终以项目根目录为基准，从其他工作目录调用脚本结果一致。
@@ -202,4 +263,4 @@ python scripts/package_project.py --output-dir artifacts/delivery
 
 包内 `PACKAGE_MANIFEST.json` 包含每个源码文件的大小和 SHA-256、内容版本、规则版本及可用的 Git 信息；清单不递归计算自身哈希。上传与解压更新见 [部署说明](deploy/README.md)。
 
-Protected runtime tool calls: see [ToolExecutor usage](docs/executor.md).
+可信运行时如何发布提案并执行批准动作，见[执行器接口](docs/executor.md)。
