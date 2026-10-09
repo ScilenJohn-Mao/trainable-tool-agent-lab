@@ -1,0 +1,9 @@
+provider: http
+name: Qwen/Qwen2.5-3B-Instruct
+version: qwen2.5-3b-base-v1
+# API root; override with the address of your Linux model server.
+base_url: http://127.0.0.1:8001/v1
+max_tokens: 512
+temperature: 0
+timeout_seconds: 60
+api_key_env: TTAL_MODEL_API_KEY

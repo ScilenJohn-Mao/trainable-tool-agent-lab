@@ -1,0 +1,6 @@
+provider: mock
+name: scripted-mock
+version: mock-v1
+max_tokens: 512
+temperature: 0
+timeout_seconds: 60

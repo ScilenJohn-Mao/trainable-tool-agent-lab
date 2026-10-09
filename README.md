@@ -31,7 +31,17 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_polic
 
 ## 本地轻量环境
 
-使用 Python 3.12 和 uv；应用依赖为 FastAPI、Uvicorn、MCP、Pydantic、PyYAML、python-dotenv，测试使用 pytest 和 HTTPX，不需要模型推理或训练依赖。
+模型客户端支持轻量 mock 和服务器 HTTP 模型端点，不在本机运行模型：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --message "Hello"
+uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --config configs/models/qwen3b.yaml
+```
+
+第一条展示带 `mock-v1` 标识的回复，第二条只查看 3B 配置，不连接服务器。
+实际端点、工具调用和 Python 接口见[模型客户端说明](docs/models.md)。此入口不执行工单或退款。
+
+使用 Python 3.12 和 uv；应用依赖为 FastAPI、Uvicorn、HTTPX、MCP、Pydantic、PyYAML、python-dotenv，测试使用 pytest，不需要模型推理或训练依赖。
 
 首次创建或锁文件变化时同步轻量应用环境；已有可用环境直接使用 `--no-sync` 命令：
 

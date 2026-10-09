@@ -13,6 +13,8 @@ required_files = [
   "README.md", ".gitignore", ".python-version", "pyproject.toml", "uv.lock",
   "src/tool_agent_lab/__init__.py", "scripts/package_project.py",
   "src/tool_agent_lab/settings.py", "configs/app.yaml", ".env.example",
+  "src/tool_agent_lab/agent/__init__.py", "src/tool_agent_lab/agent/model_client.py",
+  "configs/models/mock.yaml", "configs/models/qwen3b.yaml", "docs/models.md",
   "src/tool_agent_lab/schemas/__init__.py", "src/tool_agent_lab/schemas/common.py",
   "src/tool_agent_lab/schemas/tasks.py", "src/tool_agent_lab/schemas/actions.py",
   "src/tool_agent_lab/schemas/events.py", "scripts/check_contracts.py",

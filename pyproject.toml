@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115,<1",
+    "httpx>=0.28,<1",
     "mcp>=1.26,<2",
     "pydantic>=2.11,<3",
     "python-dotenv>=1.1,<2",
@@ -19,7 +20,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28,<1",
     "pytest>=8.4,<9",
 ]
 
