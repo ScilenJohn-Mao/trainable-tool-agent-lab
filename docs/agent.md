@@ -62,3 +62,23 @@ on the ModelClient configuration used by actual HTTP/local generation, and
 decision/tool-call budgets stop the graph before another call or tool batch.
 Context/tool byte caps also come from these budgets. Changing these files
 requires a new config version for newly created tasks.
+
+Persistent execution uses the asynchronous saver below. Paths are anchored to
+the source project root; application and checkpoint files must be separate.
+Close the context when stopping the worker. Reopen the same checkpoint file,
+construct Agent with the same model/config versions, then use snapshot and
+submit_input/submit_approval with the owned task ID to continue its saved thread.
+
+```python
+from tool_agent_lab.storage.checkpoints import open_checkpoints
+from tool_agent_lab.agent.graph import Agent
+
+async with open_checkpoints("artifacts/runtime/checkpoints.sqlite3",
+                            application_database=nodes.database) as saver:
+    agent = Agent(nodes, checkpointer=saver)
+    state = await agent.start(task_id, owner_id=owner_id)
+    # On a later process invocation, use snapshot and submit the real receipt.
+```
+
+Application writes and graph checkpoints use separate transactions. Crash
+recovery between these transactions is not implemented by this saver alone.

@@ -27,6 +27,7 @@ required_files = [
   "src/tool_agent_lab/schemas/__init__.py", "src/tool_agent_lab/schemas/common.py",
   "src/tool_agent_lab/schemas/tasks.py", "src/tool_agent_lab/schemas/actions.py",
   "src/tool_agent_lab/schemas/events.py", "scripts/check_contracts.py",
+  "src/tool_agent_lab/storage/checkpoints.py",
   "src/tool_agent_lab/storage/__init__.py", "src/tool_agent_lab/storage/database.py",
   "src/tool_agent_lab/storage/migrations/001_initial.sql",
   "src/tool_agent_lab/schemas/business.py",
