@@ -1,4 +1,4 @@
-"""Call a remote chat model or consume explicitly scripted mock replies."""
+"""Call a local or HTTP chat model, or consume explicitly scripted mock replies."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from tool_agent_lab.tools.contracts import TOOL_CONTRACTS, ToolContract
 
 
 class ModelConfig(ContractModel):
-    provider: Literal["mock", "http"]
+    provider: Literal["mock", "http", "local"]
     name: NonEmptyStr
     version: NonEmptyStr
     base_url: AnyHttpUrl | None = None
@@ -31,11 +31,23 @@ class ModelConfig(ContractModel):
     timeout_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
     api_key_env: NonEmptyStr = "TTAL_MODEL_API_KEY"
     api_key: SecretStr | None = Field(default=None, exclude=True, repr=False)
+    base_path: Path | None = None
+    adapter_path: Path | None = None
+    device: str = Field(default="cuda:0", pattern=r"^(cpu|cuda:\d+)$")
+    precision: Literal["4bit", "float16", "float32"] = "4bit"
+    context_tokens: int = Field(default=4096, gt=0)
 
     @model_validator(mode="after")
     def require_http_endpoint(self) -> Self:
         if self.provider == "http" and self.base_url is None:
             raise ValueError("HTTP models require base_url ending at the API root, such as /v1")
+        if self.provider == "local":
+            if self.base_path is None:
+                raise ValueError("Local models require base_path pointing to downloaded files")
+            if self.device == "cpu" and self.precision != "float32":
+                raise ValueError("CPU inference requires precision=float32")
+            if self.max_tokens >= self.context_tokens:
+                raise ValueError("max_tokens must leave room for input within context_tokens")
         return self
 
 
@@ -64,6 +76,9 @@ def load_model_config(
     if "api_key" in values:
         raise ValueError("Use api_key_env instead of storing an API key in model YAML")
     values["api_key"] = overrides.get(values.get("api_key_env", "TTAL_MODEL_API_KEY")) or None
+    for field in ("base_path", "adapter_path"):
+        if values.get(field):
+            values[field] = (PROJECT_ROOT / Path(values[field]).expanduser()).resolve()
     return ModelConfig.model_validate(values)
 
 
@@ -144,6 +159,7 @@ class ModelClient:
         self._mock_responses = iter(mock_responses)
         self._mock_calls = 0
         self._http_client = http_client
+        self._local_model = None
 
     async def generate(
         self,
@@ -162,6 +178,13 @@ class ModelClient:
                 response_id=f"mock-{self._mock_calls}", message=message,
                 finish_reason="tool_calls" if message.tool_calls else "stop",
             )
+
+        if self.config.provider == "local":
+            if self._local_model is None:
+                from tool_agent_lab.agent.local_model import LocalModel
+
+                self._local_model = LocalModel(self.config)
+            return await asyncio.to_thread(self._local_model.generate, messages, tools=tools)
 
         payload = {
             "model": self.config.name, "messages": list(messages),
@@ -199,18 +222,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/models/mock.yaml")
     parser.add_argument("--env-file", type=Path)
-    parser.add_argument("--message", help="Make one model call instead of inspecting configuration")
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--message", help="Make one model call instead of inspecting configuration")
+    input_group.add_argument("--messages-file", type=Path, help="JSON message history, including tool results")
     parser.add_argument("--with-tools", action="store_true", help="Include the seven shared tool schemas")
     args = parser.parse_args(argv)
     config = load_model_config(args.config, env_file=args.env_file)
-    if args.message is None:
+    if args.message is None and args.messages_file is None:
         output = config.model_dump(mode="json")
     else:
         client = ModelClient(config, mock_responses=[AssistantMessage(
             content="Mock model ready. No business operation was executed.",
         )])
+        messages = (
+            json.loads(args.messages_file.read_text(encoding="utf-8"))
+            if args.messages_file else [{"role": "user", "content": args.message}]
+        )
         reply = asyncio.run(client.generate(
-            [{"role": "user", "content": args.message}],
+            messages,
             tools=tuple(TOOL_CONTRACTS.values()) if args.with_tools else (),
         ))
         output = reply.model_dump(mode="json")

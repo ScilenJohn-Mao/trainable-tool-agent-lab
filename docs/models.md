@@ -1,8 +1,9 @@
 # Model client
 
-The lightweight client supports explicitly scripted mock replies and remote,
-OpenAI-compatible `POST /v1/chat/completions` servers. It imports no inference or
-training libraries and executes no tools or business writes.
+The client supports local Transformers + PEFT inference, explicitly scripted
+mock replies and optional OpenAI-compatible `POST /v1/chat/completions` servers.
+Mock, HTTP and configuration inspection import no inference or training
+libraries. The client executes no tools or business writes.
 
 ## Local model assets and direct inference
 
@@ -10,9 +11,8 @@ The application deployment target uses the same Transformers + PEFT direct
 inference code on native Windows and Linux. The worker loads local weights and
 an optional adapter through Python; no remote model endpoint, Ollama or vLLM is
 required for application inference. Browser-to-API HTTP/SSE remains local to the
-machine. The current client implements only mock and HTTP providers; a local
-provider and its startup command are not yet available. The HTTP examples below
-describe the existing optional compatibility interface.
+machine. Select `configs/models/qwen3b-local.yaml` for direct inference. The HTTP
+examples below describe the optional compatibility interface.
 
 Store the complete official Qwen2.5-3B-Instruct repository at
 `models/base/Qwen2.5-3B-Instruct/` under the project root, including configuration,
@@ -25,6 +25,70 @@ Root `/models/` is Git-ignored and outside the source archive allowlist;
 `configs/models/` contains application configuration and remains packaged.
 Model assets are transferred separately and preserved across source updates.
 See [the model directory instructions](../README.md#本地模型文件).
+
+From the project root, prepare the separate environment on Windows:
+
+```powershell
+uv sync --project inference --locked --python .venv/Scripts/python.exe --cache-dir .uv-cache
+uv run --project inference --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --config configs/models/qwen3b-local.yaml --message "Check ORD-1001" --with-tools
+```
+
+On Linux, use `--python python3.12` for the sync; the invocation is otherwise
+identical. The universal lock selects Windows AMD64/Linux x86_64 CUDA 12.8
+wheels, pins torch 2.9.1, Transformers 4.57.6, PEFT 0.18.1, Accelerate 1.12.0 and
+bitsandbytes 0.49.2, and aligns shared dependencies with the application lock.
+It creates `inference/.venv` and installs the shared application editable from
+`..`; it does not modify the lightweight `.venv`. Dependency installation needs
+prepared downloads or network access; model generation reads local files only.
+The runtime has not yet been installed or GPU-tested on either platform.
+
+Local fields are `base_path`, optional `adapter_path`, `device` (`cuda:0` by
+default), `precision` (`4bit`, `float16` or `float32`) and `context_tokens`.
+All support the same `TTAL_MODEL_*` overrides. Paths resolve against the source
+project root; absolute paths also work. CPU requires an explicit `float32`
+configuration and enough RAM. There is no automatic CPU, HTTP or mock fallback.
+
+The base tokenizer supplies the chat template; adapter tokenizers are not
+substituted. Every pretrained load uses a local path and `local_files_only=True`;
+remote model code is disabled. The 4-bit configuration uses NF4 with double
+quantization. Each client caches one model and serializes generation calls.
+`max_tokens` becomes `max_new_tokens`; input plus that output budget must fit
+`context_tokens`. Overflow raises an error without silently truncating history.
+Generation uses the model's EOS IDs. `timeout_seconds` is Transformers'
+best-effort `max_time`, checked between generation steps; model loading is not
+included. Replies expose `stop`, `tool_calls`, `length` or `timeout` and actual
+input/output token counts. These counts are not training logprobs.
+
+Qwen `<tool_call>` envelopes become the shared `ModelToolCall` representation,
+including unique call IDs and original argument JSON. Complete malformed
+envelopes raise an error; unfinished budget-limited output remains text with a
+non-success finish reason. The caller must check that reason, validate through
+the shared tool contract, and use the normal executor. A request to refund does
+not itself authorize or execute a refund.
+
+For another turn, append `reply.message.as_message()` and tool messages with
+matching `tool_call_id` values before calling `generate` again. The local
+adapter converts argument strings to objects for the Qwen template without
+mutating caller history. The CLI accepts a UTF-8 JSON array of message history:
+
+```powershell
+uv run --project inference --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --config configs/models/qwen3b-local.yaml --messages-file path/to/history.json --with-tools
+```
+
+The history path is relative to the terminal working directory. Set
+`TTAL_MODEL_ADAPTER_PATH=models/adapters/<version>` in the process or `.env` to
+load a transferred PEFT adapter; start a new client/process after changing it.
+Keep the exact training base revision and files. This loader does not prove that
+an arbitrary ART checkpoint is a compatible exported PEFT adapter.
+
+The CLI and Python boundary are implemented. Actual 3B tool behavior, GPU memory,
+speed and Windows/Linux adapter compatibility still require real model runs;
+the Agent graph, worker and UI are not connected yet.
+
+API references: [Qwen's tokenizer template](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/tokenizer_config.json),
+[Transformers chat templates](https://huggingface.co/docs/transformers/v4.57.3/chat_templating),
+[PyTorch wheels](https://pytorch.org/get-started/previous-versions/) and
+[bitsandbytes installation](https://huggingface.co/docs/bitsandbytes/installation).
 
 Direct inference uses a separate Python 3.12/uv environment with PyTorch,
 Transformers, PEFT, Accelerate and bitsandbytes. The lightweight application

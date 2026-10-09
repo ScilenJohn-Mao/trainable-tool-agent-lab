@@ -30,6 +30,31 @@ def completion(message: dict, *, reason: str = "stop") -> dict:
     }
 
 
+def test_cli_accepts_message_history_file(model_root, tmp_path, monkeypatch, capsys):
+    history = [
+        {"role": "assistant", "content": None, "tool_calls": [{
+            "id": "call-order", "type": "function", "function": {
+                "name": "get_order", "arguments": '{"order_id":"ORD-1001"}',
+            },
+        }]},
+        {"role": "tool", "tool_call_id": "call-order", "content": "Order found"},
+    ]
+    path = tmp_path / "history.json"
+    path.write_text(json.dumps(history), encoding="utf-8")
+    captured = {}
+    generate = models.ModelClient.generate
+
+    async def record(self, messages, *, tools=()):
+        captured.update(messages=messages, tools=tools)
+        return await generate(self, messages, tools=tools)
+
+    monkeypatch.setattr(models.ModelClient, "generate", record)
+    assert models.main(["--messages-file", str(path), "--with-tools"]) == 0
+    assert captured["messages"] == history
+    assert len(captured["tools"]) == 7
+    assert json.loads(capsys.readouterr().out)["response_id"] == "mock-1"
+
+
 def test_config_defaults_and_process_override_dotenv_without_writes(
     model_root: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

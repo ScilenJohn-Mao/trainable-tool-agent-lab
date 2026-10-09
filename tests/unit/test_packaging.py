@@ -59,6 +59,8 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "frontend/src/main.tsx": "export {};\n",
         "training/art/pyproject.toml": '# Test fixture, not a training environment.\n',
         "training/art/uv.lock": '# Test fixture, not a generated training lock.\n',
+        "inference/pyproject.toml": '# Inference packaging fixture.\n',
+        "inference/uv.lock": '# Lock presence fixture.\n',
     }
     excluded = {
         "src/.venv/hidden.py": "ignore",
@@ -86,6 +88,10 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "scripts/old.tar.gz": "ignore",
         "scripts/.git/config": "ignore",
         "artifacts/generated.json": "ignore",
+        "models/base/qwen/config.json": "asset",
+        "models/adapters/candidate/adapter_config.json": "asset",
+        "inference/custom-env/pyvenv.cfg": "home = unused",
+        "inference/custom-env/Lib/hidden.py": "ignore",
         "reports/progress.md": "ignore",
         "reports/acceptance.md": "ignore",
         "docs/AGENTS.md": "ignore",
@@ -168,7 +174,7 @@ def test_dry_run_and_custom_output_are_independent_of_working_directory(
 
 
 @pytest.mark.parametrize(
-    "missing", ["uv.lock", "frontend/package-lock.json", "training/art/uv.lock"]
+    "missing", ["uv.lock", "frontend/package-lock.json", "training/art/uv.lock", "inference/uv.lock"]
 )
 def test_missing_required_lock_fails_without_creating_archive(source_tree: Path, missing: str) -> None:
     if missing == "uv.lock":

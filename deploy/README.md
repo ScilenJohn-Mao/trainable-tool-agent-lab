@@ -1,6 +1,6 @@
 # 源码包与服务器更新
 
-源码包包含项目代码、依赖锁文件和运行资源。Windows/Linux 共用应用代码；这里的安装命令只同步轻量应用依赖，用于 mock/HTTP/MCP/模拟业务。直接模型推理采用独立 Transformers + PEFT 环境；当前版本尚无直接加载器及相应安装/启动命令，不应把下面的轻量同步当作模型环境安装。
+源码包包含项目代码、依赖锁文件和运行资源。Windows/Linux 共用应用代码；这里的轻量安装命令用于 mock/HTTP/MCP/模拟业务。直接模型推理使用 `inference/pyproject.toml` 和真实 `inference/uv.lock` 建立独立 Transformers + PEFT 环境，安装/CLI 命令见 [README](../README.md#本地模型文件)。不要把轻量同步当作模型环境安装；真实 GPU 效果须在两端分别验证。
 
 模型资产独立保存在项目根目录 `models/base/Qwen2.5-3B-Instruct/`、`models/adapters/<version>/`，完整基座与训练后 adapter 的要求见 [README](../README.md#本地模型文件)。根目录 models 不在源码包白名单内，configs/models 属于必须交付的应用配置。部署新源码目录时保留并复制/挂载已有模型资产，或者配置到源码外的持久模型位置；不要期待源码 ZIP 内含权重、HF 配置或 tokenizer。
 

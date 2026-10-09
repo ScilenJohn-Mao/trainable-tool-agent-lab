@@ -1,0 +1,11 @@
+provider: local
+name: Qwen/Qwen2.5-3B-Instruct
+version: qwen2.5-3b-local-base-v1
+base_path: models/base/Qwen2.5-3B-Instruct
+# Set adapter_path to models/adapters/<version> to use exported PEFT weights.
+device: cuda:0
+precision: 4bit
+context_tokens: 4096
+max_tokens: 512
+temperature: 0
+timeout_seconds: 60

@@ -80,7 +80,16 @@ trainable-tool-agent-lab/
 
 应用的直接推理方式采用 Transformers + PEFT，在每台机器的 worker 内加载本机文件；不要求远程模型服务、服务器 IP、Ollama 或 vLLM。以 3B 的 4-bit、单请求、2K–4K 总上下文及最多 512 个输出 token 为初始验证配置，实际显存和工具效果须实测。模型、依赖及前端资源准备齐全后，加载使用本地路径与离线选项；浏览器到同机 API 的 HTTP/SSE 不需要外网。
 
-**当前版本仅实现 mock/HTTP 客户端，尚无直接推理加载器或启动命令。放好文件不会自动启动模型，也不能在当前 YAML 中使用尚未支持的 provider。** HTTP 客户端的现有参数见[模型客户端说明](docs/models.md)。
+客户端支持 `local`、`mock` 和兼容 HTTP 三种入口；`local` 直接加载本机基座与可选 PEFT adapter，不调用模型 HTTP。当前可通过 CLI 调用，Agent 图、worker 和页面尚未接入。真实 3B/GPU 与训练 adapter 的两端效果仍须实测；轻量测试中的模型替身不能代替它们。完整参数与消息历史用法见[模型客户端说明](docs/models.md)。
+
+在项目根目录准备独立推理环境（Windows，使用已有 Python 3.12 解释器）：
+
+```powershell
+uv sync --project inference --locked --python .venv/Scripts/python.exe --cache-dir .uv-cache
+uv run --project inference --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --config configs/models/qwen3b-local.yaml --message "请查询 ORD-1001 的订单信息" --with-tools
+```
+
+Linux 使用同一锁文件和调用命令，安装时将 `--python .venv/Scripts/python.exe` 改为 `--python python3.12`。锁文件限定 Python 3.12、Windows AMD64/Linux x86_64 和 PyTorch CUDA 12.8 wheel；驱动与 GPU 运行兼容需在各机器验证。安装会下载依赖，提前准备好完整模型与依赖后，推理只读取本地模型文件。缺文件、缺依赖或 CUDA 不可用直接报错，不切换到远程模型或 mock。CLI 只输出模型回复/工具请求，不执行工具或退款。
 
 推理环境使用独立的 Python 3.12/uv 环境，安装 PyTorch、Transformers、PEFT、Accelerate、bitsandbytes 及共享应用包；轻量 `.venv` 保持原有用途。两端共用应用源码，依赖包按 Windows/Linux 和 GPU 匹配。RL 训练使用 Linux 的独立 `training/art/` 环境，并依赖固定版本 ART；其 vLLM runtime 按对应 ART 的 `vllm_runtime/pyproject.toml`、`uv.lock` 和 `setup.sh` 创建独立 uv 环境，不能把裸 vLLM 安装到应用或训练主环境替代它。ART 内部允许同机通信；训练及日志保存到本机，训练后的 adapter 通过文件搬回 Windows 推理，Windows 无需安装 ART 或 vLLM。具体环境安装命令须以对应版本的锁文件与实际验证为准。
 
