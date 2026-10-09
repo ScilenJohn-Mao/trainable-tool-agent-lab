@@ -50,7 +50,11 @@ class Agent:
 
     def binding(self, task_id: str, owner_id: str):
         state = load_agent_state(self.nodes.database, task_id, owner_id=owner_id, model_version=self.nodes.model.config.version)
-        return state, {"configurable": {"thread_id": state["identity"]["thread_id"]}, "recursion_limit": 256}
+        if state["identity"]["config_version"] != self.nodes.config.version:
+            raise TaskError("config_version_mismatch")
+        budgets = self.nodes.config.budgets
+        return state, {"configurable": {"thread_id": state["identity"]["thread_id"]},
+                       "recursion_limit": budgets.max_decisions * (4 * budgets.max_tool_calls_per_turn + 3) + 8}
 
     async def start(self, task_id: str, *, owner_id: str):
         state, config = self.binding(task_id, owner_id)

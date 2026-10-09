@@ -54,3 +54,11 @@ Policy bodies/excerpts may be shortened with an explicit `truncated` marker;
 references, amounts and authorization facts are not shortened. Full structured
 tool replies remain in graph state. If critical information alone does not fit,
 the Agent stops with a failed result instead of silently deleting evidence.
+
+The shared prompt is configs/prompts/after_sales.txt; configs/agents/default.yaml
+selects it and configs/budgets.yaml. AgentNodes accepts a loaded AgentConfig.
+The saved attempt must use the same config version. Output tokens are capped
+on the ModelClient configuration used by actual HTTP/local generation, and
+decision/tool-call budgets stop the graph before another call or tool batch.
+Context/tool byte caps also come from these budgets. Changing these files
+requires a new config version for newly created tasks.

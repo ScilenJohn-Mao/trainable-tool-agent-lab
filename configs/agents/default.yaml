@@ -1,0 +1,3 @@
+version: app-v1
+budgets_path: configs/budgets.yaml
+prompt_path: configs/prompts/after_sales.txt
