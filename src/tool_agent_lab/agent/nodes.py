@@ -14,6 +14,7 @@ from tool_agent_lab.agent.state import AgentState, identity_of
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.task_service import TaskError, change_status, load_current_attempt
 from tool_agent_lab.schemas.common import NonEmptyStr
+from tool_agent_lab.schemas.results import ConclusionDraft, QuestionDraft, build_result
 from tool_agent_lab.schemas.tasks import TaskStatus
 from tool_agent_lab.storage.database import connect, transaction
 from tool_agent_lab.storage.event_repository import EventRepository
@@ -75,12 +76,15 @@ class AgentNodes:
             control = json.loads(text)
         except json.JSONDecodeError:
             control = {"kind": "final", "summary": text}
-        if control.get("kind") == "ask_user":
-            question = TypeAdapter(NonEmptyStr).validate_python(control["question"])
+        try:
+            draft = TypeAdapter(QuestionDraft | ConclusionDraft).validate_python(control)
+        except ValidationError:
+            return updates | {"messages": messages, "result": {"outcome": "failed", "reason": "invalid_conclusion"}, "status": "failed"}
+        if isinstance(draft, QuestionDraft):
             return updates | {"messages": messages, "waiting": {
-                "kind": "input", "request_id": f"input-{uuid4().hex}", "question": question,
+                "kind": "input", "request_id": f"input-{uuid4().hex}", "question": draft.question,
             }}
-        return updates | {"messages": messages, "result": {"outcome": "answered", "summary": control["summary"]}}
+        return updates | {"messages": messages, "result": {"outcome": "answered", "summary": draft.summary}}
 
     def select_tool(self, state: AgentState) -> dict:
         return {"active_call": state["pending_calls"][0], "pending_calls": state["pending_calls"][1:]}
@@ -137,6 +141,17 @@ class AgentNodes:
             EventRepository(connection).append(identity_of(state), "tool_result", self.rules.business_time,
                 call_id=call["id"], payload={"tool": call["function"]["name"], "result": result})
         update = self.tool_result(state, result)
+        if result["status"] == "ok":
+            name, data = call["function"]["name"], result["data"]
+            facts = dict(state["facts"])
+            if name == "get_order":
+                facts["orders"] = dict(facts.get("orders", {})) | {data["order_id"]: data}
+            elif name == "get_operation":
+                facts["operation_lookups"] = dict(facts.get("operation_lookups", {})) | {data["operation_key"]: data}
+            elif name in ("search_policy", "read_policy"):
+                refs = [hit["reference"] for hit in data["hits"]] if name == "search_policy" else [data["reference"]]
+                update["citations"] = list({json.dumps(ref, sort_keys=True): ref for ref in state["citations"] + refs}.values())
+            update["facts"] = facts
         if result["status"] == "ok" and not TOOL_CONTRACTS[call["function"]["name"]].read_only:
             update["operations"] = state["operations"] + [result["data"]]
         return update
@@ -162,6 +177,7 @@ class AgentNodes:
                 "clarification_attempted": True, "waiting": None, "status": "running"}
 
     def finish(self, state: AgentState) -> dict:
+        result = build_result(state, self.database)
         status = TaskStatus.FAILED if state["status"] == "failed" else TaskStatus.COMPLETED
         self.status(state, status)
-        return {"status": status.value}
+        return {"status": status.value, "result": result.model_dump(mode="json")}

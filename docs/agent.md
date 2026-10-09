@@ -33,3 +33,13 @@ existing confirmation service. Both methods resume the persisted thread only
 after checking the receipt, and already consumed exact retries do not rerun the
 model or append another user message. Only recorded input sets the trusted
 clarification flag. Input text is limited to 4000 characters for event storage.
+
+Final `AgentResult` contains task/attempt/model identity, outcome, actual ledger
+operations, refreshed owned order facts, retrieved policy citations and the
+confirmed business rule references. The runtime re-reads committed ledger rows
+and consumed confirmations; a proposal or model claim is not an operation.
+Displayed monetary summaries come from those rows. The model's draft remains
+in the conversation trace, so an invented amount cannot replace the receipt.
+Retrieved document citations and authorization rule references are separate.
+Invalid conclusion shapes, generation truncation and budget stops produce an
+explicit failed result. These results are graph state, not yet an API endpoint.
