@@ -1,6 +1,10 @@
 # 源码包与服务器更新
 
-源码包包含项目代码、依赖锁文件和运行资源。Windows 使用 Python 3.12 轻量应用环境运行 HTTP/MCP/模拟业务；Linux 可运行同一应用。真实模型与 RL 使用单独的服务器环境，这里的命令只安装应用锁文件中的轻量依赖。
+源码包包含项目代码、依赖锁文件和运行资源。Windows/Linux 共用应用代码；这里的安装命令只同步轻量应用依赖，用于 mock/HTTP/MCP/模拟业务。直接模型推理采用独立 Transformers + PEFT 环境；当前版本尚无直接加载器及相应安装/启动命令，不应把下面的轻量同步当作模型环境安装。
+
+模型资产独立保存在项目根目录 `models/base/Qwen2.5-3B-Instruct/`、`models/adapters/<version>/`，完整基座与训练后 adapter 的要求见 [README](../README.md#本地模型文件)。根目录 models 不在源码包白名单内，configs/models 属于必须交付的应用配置。部署新源码目录时保留并复制/挂载已有模型资产，或者配置到源码外的持久模型位置；不要期待源码 ZIP 内含权重、HF 配置或 tokenizer。
+
+应用直接推理在每台机器内进行，不要求远程模型服务或服务器 IP；浏览器与 API 使用同机 HTTP/SSE。Linux 的 RL 环境依赖固定版本 ART，专用 vLLM runtime 按该版本 vllm_runtime 的 pyproject/uv.lock/setup.sh 单独建立 uv 环境，通过 ART 支持的 runtime executable 绑定，不在训练主环境混装裸 vLLM。依赖、模型与编译资源先准备齐全，训练允许同机通信，禁用外部日志/存储/judge 后验证离线运行。adapter 导出为标准 PEFT 格式并附匹配基座/tokenizer/模板信息，单独搬回 Windows 加载，本机推理无需 ART/vLLM。
 
 ## 本地打包
 
@@ -58,7 +62,7 @@ uv run --no-sync --cache-dir .uv-cache python scripts/package_project.py --dry-r
 
 核对导入位置指向本次解压的源码。这些检查使用轻量应用环境，无需安装 GPU 依赖。
 
-同步仅针对当前应用 pyproject.toml/uv.lock，不使用 all-extras/all-groups，不在 Windows 安装模型或训练依赖。
+此同步仅针对当前轻量应用 pyproject.toml/uv.lock，不使用 all-extras/all-groups。Windows 的模型依赖由独立推理环境管理；ART 与 vLLM runtime 仅 Linux 训练安装。
 
 ## 隔离业务演示
 

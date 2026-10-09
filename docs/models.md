@@ -4,6 +4,43 @@ The lightweight client supports explicitly scripted mock replies and remote,
 OpenAI-compatible `POST /v1/chat/completions` servers. It imports no inference or
 training libraries and executes no tools or business writes.
 
+## Local model assets and direct inference
+
+The application deployment target uses the same Transformers + PEFT direct
+inference code on native Windows and Linux. The worker loads local weights and
+an optional adapter through Python; no remote model endpoint, Ollama or vLLM is
+required for application inference. Browser-to-API HTTP/SSE remains local to the
+machine. The current client implements only mock and HTTP providers; a local
+provider and its startup command are not yet available. The HTTP examples below
+describe the existing optional compatibility interface.
+
+Store the complete official Qwen2.5-3B-Instruct repository at
+`models/base/Qwen2.5-3B-Instruct/` under the project root, including configuration,
+tokenizer, weight shards and their index. Store exported PEFT adapters at
+`models/adapters/<version>/`, including `adapter_config.json` and
+`adapter_model.safetensors`. Pin the same base revision, tokenizer and chat
+template as training. An adapter is not a complete base model.
+
+Root `/models/` is Git-ignored and outside the source archive allowlist;
+`configs/models/` contains application configuration and remains packaged.
+Model assets are transferred separately and preserved across source updates.
+See [the model directory instructions](../README.md#本地模型文件).
+
+Direct inference uses a separate Python 3.12/uv environment with PyTorch,
+Transformers, PEFT, Accelerate and bitsandbytes. The lightweight application
+environment remains usable for mock/API/MCP checks. Model loading must use local
+paths and offline options; missing files must not trigger remote inference or a
+mock substitute. Windows and Linux require compatible platform-specific GPU
+packages even though application source and model assets are shared.
+
+Only Linux RL training depends on fixed-version ART. Its dedicated vLLM runtime
+uses the matching ART `vllm_runtime/pyproject.toml`, `uv.lock` and `setup.sh` in
+its own uv environment, separate from the training and application environments.
+ART may communicate with that runtime over same-machine HTTP. Once dependencies,
+models and required compilation resources are prepared, training is validated
+without external services; cloud logging/storage and external model judges are
+disabled. Exported PEFT adapters can be moved to Windows without ART or vLLM.
+
 ## Inspect and call
 
 Run from the project directory:

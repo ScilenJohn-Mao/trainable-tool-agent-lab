@@ -31,7 +31,7 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_polic
 
 ## 本地轻量环境
 
-模型客户端支持轻量 mock 和服务器 HTTP 模型端点，不在本机运行模型：
+当前模型客户端支持轻量 mock 和 HTTP 模型端点；本地权重直接加载尚不可用：
 
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --message "Hello"
@@ -50,7 +50,39 @@ uv sync --locked --python 3.12 --cache-dir .uv-cache
 uv run --no-sync --cache-dir .uv-cache python -c "import sys; print(sys.version); print(sys.executable)"
 ```
 
-应显示 Python 3.12 和本项目 `.venv` 中的解释器。也可将 `--python` 改成已安装 Python 3.12 的绝对路径。此处只同步应用锁文件；应用与训练环境分别管理，真实模型推理、GPU 和 RL 在 Linux 服务器运行。
+应显示 Python 3.12 和本项目 `.venv` 中的解释器。也可将 `--python` 改成已安装 Python 3.12 的绝对路径。此处只同步轻量应用锁文件，不安装模型推理或训练依赖。
+
+## 本地模型文件
+
+基座模型和 LoRA adapter 统一放在项目根目录的 `models/`，Windows 和 Linux 使用相同的相对目录约定：
+
+```text
+trainable-tool-agent-lab/
+  models/
+    base/
+      Qwen2.5-3B-Instruct/
+        config.json
+        tokenizer_config.json
+        tokenizer.json
+        model*.safetensors
+        ...
+    adapters/
+      <version>/
+        adapter_config.json
+        adapter_model.safetensors
+        ...
+  configs/models/
+```
+
+从 [Qwen 官方模型文件页面](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/tree/main)下载同一 revision 的完整仓库文件到 `models/base/Qwen2.5-3B-Instruct/`；上面的文件列表只是示意，应保留仓库内实际需要的配置、tokenizer、权重分片及索引。不要仅下载一片权重，也不要放入 Git LFS 指针文件。训练后导出的标准 PEFT adapter 放到 `models/adapters/<version>/`，并使用与训练一致的基座 revision、tokenizer 和聊天模板。
+
+`models/` 保存模型资产，包括 Hugging Face 的模型配置；`configs/models/` 保存应随源码交付的应用模型选择与生成参数。根目录 `/models/` 被 Git 忽略，并在源码包白名单之外；`configs/models/` 仍须打包。模型资产单独复制或下载，源码更新时保留已有模型目录。`artifacts/` 继续保存业务运行数据、日志和源码包，无需把模型放到 `artifacts/models/`。
+
+应用的直接推理方式采用 Transformers + PEFT，在每台机器的 worker 内加载本机文件；不要求远程模型服务、服务器 IP、Ollama 或 vLLM。以 3B 的 4-bit、单请求、2K–4K 总上下文及最多 512 个输出 token 为初始验证配置，实际显存和工具效果须实测。模型、依赖及前端资源准备齐全后，加载使用本地路径与离线选项；浏览器到同机 API 的 HTTP/SSE 不需要外网。
+
+**当前版本仅实现 mock/HTTP 客户端，尚无直接推理加载器或启动命令。放好文件不会自动启动模型，也不能在当前 YAML 中使用尚未支持的 provider。** HTTP 客户端的现有参数见[模型客户端说明](docs/models.md)。
+
+推理环境使用独立的 Python 3.12/uv 环境，安装 PyTorch、Transformers、PEFT、Accelerate、bitsandbytes 及共享应用包；轻量 `.venv` 保持原有用途。两端共用应用源码，依赖包按 Windows/Linux 和 GPU 匹配。RL 训练使用 Linux 的独立 `training/art/` 环境，并依赖固定版本 ART；其 vLLM runtime 按对应 ART 的 `vllm_runtime/pyproject.toml`、`uv.lock` 和 `setup.sh` 创建独立 uv 环境，不能把裸 vLLM 安装到应用或训练主环境替代它。ART 内部允许同机通信；训练及日志保存到本机，训练后的 adapter 通过文件搬回 Windows 推理，Windows 无需安装 ART 或 vLLM。具体环境安装命令须以对应版本的锁文件与实际验证为准。
 
 ## 应用配置与运行目录
 

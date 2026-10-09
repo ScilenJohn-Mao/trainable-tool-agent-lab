@@ -1,6 +1,7 @@
 rules_version = 1
 
 # Only project-owned source and explicitly selected resources enter the archive.
+# Root models/ is outside this allowlist; configs/models/ remains source.
 include = [
   "README.md", ".gitignore", ".python-version", ".env.example",
   "pyproject.toml", "uv.lock",
