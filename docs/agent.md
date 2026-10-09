@@ -43,3 +43,14 @@ in the conversation trace, so an invented amount cannot replace the receipt.
 Retrieved document citations and authorization rule references are separate.
 Invalid conclusion shapes, generation truncation and budget stops produce an
 explicit failed result. These results are graph state, not yet an API endpoint.
+
+Model-visible context preserves the original request, latest complete turn,
+order amounts, committed operation keys, human decisions, input receipts and
+policy versions in a runtime-built facts section. Old turns are removed as whole
+blocks; assistant tool calls and all matching results are never split. UTF-8
+byte budgets include serialized messages and tool schemas. They are not token
+estimates: the local loader additionally checks its real tokenizer budget.
+Policy bodies/excerpts may be shortened with an explicit `truncated` marker;
+references, amounts and authorization facts are not shortened. Full structured
+tool replies remain in graph state. If critical information alone does not fit,
+the Agent stops with a failed result instead of silently deleting evidence.

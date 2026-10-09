@@ -9,6 +9,7 @@ from langgraph.types import interrupt
 from pydantic import TypeAdapter, ValidationError
 
 from tool_agent_lab.agent.model_client import ModelClient
+from tool_agent_lab.agent.context import ContextError, bounded_tool_result, model_context
 from tool_agent_lab.agent.inputs import InputService
 from tool_agent_lab.agent.state import AgentState, identity_of
 from tool_agent_lab.business.rules import BusinessRules
@@ -39,6 +40,8 @@ class AgentNodes:
     rules: BusinessRules
     model: ModelClient
     max_decisions: int = 12
+    max_context_bytes: int = 24000
+    max_tool_output_bytes: int = 4096
 
     def executor(self, state: AgentState) -> ToolExecutor:
         return ToolExecutor(
@@ -61,10 +64,12 @@ class AgentNodes:
     async def decide(self, state: AgentState) -> dict:
         if state["model_calls"] >= self.max_decisions:
             return {"result": {"outcome": "failed", "reason": "decision_budget_exceeded"}, "status": "failed"}
-        reply = await self.model.generate(
-            [{"role": "system", "content": SYSTEM_PROMPT}] + state["messages"],
-            tools=tuple(TOOL_CONTRACTS.values()),
-        )
+        tools = tuple(TOOL_CONTRACTS.values())
+        try:
+            messages = model_context(state, SYSTEM_PROMPT, tools=tools, max_bytes=self.max_context_bytes)
+        except ContextError as error:
+            return {"result": {"outcome": "failed", "reason": str(error)}, "status": "failed"}
+        reply = await self.model.generate(messages, tools=tools)
         updates = {"model_calls": state["model_calls"] + 1}
         if reply.finish_reason in ("length", "timeout"):
             return updates | {"result": {"outcome": "failed", "reason": "model_" + reply.finish_reason}, "status": "failed"}
@@ -93,7 +98,7 @@ class AgentNodes:
         call = state["active_call"]
         return {
             "messages": state["messages"] + [{"role": "tool", "tool_call_id": call["id"],
-                                             "content": json.dumps(result, ensure_ascii=False)}],
+                                             "content": bounded_tool_result(call["function"]["name"], result, self.max_tool_output_bytes)}],
             "tool_results": state["tool_results"] + [{"tool": call["function"]["name"], "result": result}],
             "active_call": None, "proposal": None, "waiting": None,
         }
@@ -137,9 +142,10 @@ class AgentNodes:
                 call_id=call["id"], payload={"tool": call["function"]["name"], "arguments": arguments})
         reply = await self.executor(state).call_tool(call["function"]["name"], arguments, call_id=call["id"])
         result = reply.result.model_dump(mode="json")
+        logged_result = json.loads(bounded_tool_result(call["function"]["name"], result, self.max_tool_output_bytes))
         with transaction(self.database) as connection:
             EventRepository(connection).append(identity_of(state), "tool_result", self.rules.business_time,
-                call_id=call["id"], payload={"tool": call["function"]["name"], "result": result})
+                call_id=call["id"], payload={"tool": call["function"]["name"], "result": logged_result})
         update = self.tool_result(state, result)
         if result["status"] == "ok":
             name, data = call["function"]["name"], result["data"]
