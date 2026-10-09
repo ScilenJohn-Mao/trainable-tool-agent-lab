@@ -9,6 +9,7 @@ from langgraph.types import interrupt
 from pydantic import TypeAdapter, ValidationError
 
 from tool_agent_lab.agent.model_client import ModelClient
+from tool_agent_lab.agent.inputs import InputService
 from tool_agent_lab.agent.state import AgentState, identity_of
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.task_service import TaskError, change_status, load_current_attempt
@@ -105,16 +106,21 @@ class AgentNodes:
             return self.failure(state, error.code if isinstance(error, TaskError) else "invalid_arguments")
         return {"proposal": proposal.model_dump(mode="json"), "status": "waiting_approval"}
 
-    def wait_approval(self, state: AgentState) -> dict:
-        request_id = interrupt({"kind": "approval", "proposal": state["proposal"]})
+    def approval_receipt(self, state: AgentState, request_id: str):
         identity = identity_of(state)
         with connect(self.database) as connection:
             approval = TaskRepository(connection).get_approval(identity.task_id, request_id, identity.owner_id)
         if approval is None or approval.proposal.model_dump(mode="json") != state["proposal"]:
             raise TaskError("confirmation_required")
+        return approval
+
+    def wait_approval(self, state: AgentState) -> dict:
+        request_id = interrupt({"kind": "approval", "proposal": state["proposal"]})
+        approval = self.approval_receipt(state, request_id)
+        receipt = {"approval_receipts": state["approval_receipts"] + [approval.model_dump(mode="json")]}
         if approval.request.decision == "rejected":
-            return self.failure(state, "approval_rejected") | {"status": "running"}
-        return {"status": "running"}
+            return self.failure(state, "approval_rejected") | {"status": "running"} | receipt
+        return {"status": "running"} | receipt
 
     async def execute(self, state: AgentState) -> dict:
         call = state["active_call"]
@@ -139,10 +145,20 @@ class AgentNodes:
         self.status(state, TaskStatus.WAITING_INPUT, ("input_requested", state["waiting"]))
         return {"status": "waiting_input"}
 
+    def input_receipt(self, state: AgentState, request_id: str):
+        identity = identity_of(state)
+        receipt = InputService(self.database, business_time=self.rules.business_time).get(
+            identity.task_id, request_id, owner_id=identity.owner_id,
+        )
+        if receipt is None or receipt.input_request_id != state["waiting"]["request_id"]:
+            raise TaskError("input_receipt_required")
+        return receipt
+
     def wait_input(self, state: AgentState) -> dict:
-        answer = TypeAdapter(NonEmptyStr).validate_python(interrupt(state["waiting"]))
-        self.status(state, TaskStatus.RUNNING, ("input_received", {"request_id": state["waiting"]["request_id"], "message": answer}))
-        return {"messages": state["messages"] + [{"role": "user", "content": answer}],
+        request_id = TypeAdapter(NonEmptyStr).validate_python(interrupt(state["waiting"]))
+        receipt = self.input_receipt(state, request_id)
+        return {"messages": state["messages"] + [{"role": "user", "content": receipt.message}],
+                "input_receipts": state["input_receipts"] + [receipt.model_dump(mode="json")],
                 "clarification_attempted": True, "waiting": None, "status": "running"}
 
     def finish(self, state: AgentState) -> dict:

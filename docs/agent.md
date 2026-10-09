@@ -22,3 +22,14 @@ For a final response, it returns `{"kind":"final","summary":"..."}`.
 Tool requests retain their call IDs, and each gets a matching tool message.
 Use an explicit `InMemorySaver` only for development; it cannot survive restart.
 The graph is not yet connected to the application API, worker or page.
+
+Supplemental input uses `InputRequest(request_id=..., input_request_id=...,
+message=...)` and `agent.submit_input(task_id, request, owner_id=...)`. Copy
+`input_request_id` from the current interrupt. The input service appends the
+real reply and restores running status in one database transaction. An exact
+retry returns its prior receipt; a changed reply or stale input target fails.
+`agent.submit_approval(task_id, ApprovalRequest(...), owner_id=...)` uses the
+existing confirmation service. Both methods resume the persisted thread only
+after checking the receipt, and already consumed exact retries do not rerun the
+model or append another user message. Only recorded input sets the trusted
+clarification flag. Input text is limited to 4000 characters for event storage.

@@ -2,10 +2,15 @@
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
+from pydantic import TypeAdapter
 
+from tool_agent_lab.agent.inputs import InputRequest, InputService
 from tool_agent_lab.agent.nodes import AgentNodes
 from tool_agent_lab.agent.state import AgentState, load_agent_state
 from tool_agent_lab.runtime.task_service import TaskError, TaskService
+from tool_agent_lab.runtime.approvals import ApprovalService
+from tool_agent_lab.schemas.actions import ApprovalRequest
+from tool_agent_lab.schemas.common import NonEmptyStr
 from tool_agent_lab.tools.contracts import TOOL_CONTRACTS
 
 
@@ -63,6 +68,31 @@ class Agent:
         return snapshot
 
     async def resume(self, task_id: str, value, *, owner_id: str):
-        await self.snapshot(task_id, owner_id=owner_id)
+        value = TypeAdapter(NonEmptyStr).validate_python(value)
+        snapshot = await self.snapshot(task_id, owner_id=owner_id)
+        if snapshot.next == ("wait_input",):
+            self.nodes.input_receipt(snapshot.values, value)
+        elif snapshot.next == ("wait_approval",):
+            self.nodes.approval_receipt(snapshot.values, value)
+        else:
+            raise TaskError("graph_not_waiting")
         _, config = self.binding(task_id, owner_id)
         return await self.graph.ainvoke(Command(resume=value), config)
+
+    async def submit_input(self, task_id: str, request: InputRequest, *, owner_id: str):
+        snapshot = await self.snapshot(task_id, owner_id=owner_id)
+        receipt = InputService(self.nodes.database, business_time=self.nodes.rules.business_time).record(
+            task_id, request, owner_id=owner_id,
+        )
+        if receipt.model_dump(mode="json") in snapshot.values["input_receipts"]:
+            return snapshot.values
+        return await self.resume(task_id, receipt.request_id, owner_id=owner_id)
+
+    async def submit_approval(self, task_id: str, request: ApprovalRequest, *, owner_id: str):
+        snapshot = await self.snapshot(task_id, owner_id=owner_id)
+        receipt = ApprovalService(self.nodes.database, business_time=self.nodes.rules.business_time).record(
+            task_id, request, owner_id=owner_id,
+        )
+        if receipt.model_dump(mode="json") in snapshot.values["approval_receipts"]:
+            return snapshot.values
+        return await self.resume(task_id, receipt.request.request_id, owner_id=owner_id)

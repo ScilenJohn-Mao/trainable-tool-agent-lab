@@ -18,6 +18,8 @@ class AgentState(TypedDict):
     proposal: dict[str, Any] | None
     waiting: dict[str, Any] | None
     clarification_attempted: bool
+    input_receipts: list[dict[str, Any]]
+    approval_receipts: list[dict[str, Any]]
     tool_results: list[dict[str, Any]]
     operations: list[dict[str, Any]]
     facts: dict[str, Any]
@@ -42,6 +44,6 @@ def load_agent_state(
     return AgentState(
         identity=identity, messages=[{"role": "user", "content": task.user_message}],
         model_calls=0, pending_calls=[], active_call=None, proposal=None, waiting=None,
-        clarification_attempted=False, tool_results=[], operations=[], citations=[], result=None,
+        clarification_attempted=False, input_receipts=[], approval_receipts=[], tool_results=[], operations=[], citations=[], result=None,
         facts={"order_id": task.order_id} if task.order_id else {}, status=task.status.value,
     )

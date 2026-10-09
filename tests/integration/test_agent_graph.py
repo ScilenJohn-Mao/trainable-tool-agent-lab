@@ -24,14 +24,14 @@ def tool_message(name, arguments, call_id):
     )),))
 
 
-def setup_agent(tmp_path, replies):
+def setup_agent(tmp_path, replies, *, request=None):
     settings = load_settings()
     database = tmp_path / "app.sqlite3"
     seed_demo(database, settings=settings)
     rules = BusinessRules.from_file(settings.business_data_dir / "spec.json")
     model = ModelClient(load_model_config(), mock_responses=replies)
     tasks = TaskService(database, business_time=rules.business_time, model_version=model.config.version)
-    task = tasks.create(TaskCreate(user_message="Refund the damaged ORD-1001", order_id="ORD-1001"), owner_id=settings.dev_owner_id)
+    task = tasks.create(request or TaskCreate(user_message="Refund the damaged ORD-1001", order_id="ORD-1001"), owner_id=settings.dev_owner_id)
     nodes = AgentNodes(database, settings.business_data_dir, rules, model)
     return Agent(nodes, checkpointer=InMemorySaver()), tasks, task, rules
 

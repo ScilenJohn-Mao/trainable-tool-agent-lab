@@ -19,6 +19,7 @@ required_files = [
   "src/tool_agent_lab/agent/local_model.py", "configs/models/qwen3b-local.yaml",
   "src/tool_agent_lab/agent/state.py", "docs/agent.md",
   "src/tool_agent_lab/agent/graph.py", "src/tool_agent_lab/agent/nodes.py",
+  "src/tool_agent_lab/agent/inputs.py",
   "src/tool_agent_lab/schemas/__init__.py", "src/tool_agent_lab/schemas/common.py",
   "src/tool_agent_lab/schemas/tasks.py", "src/tool_agent_lab/schemas/actions.py",
   "src/tool_agent_lab/schemas/events.py", "scripts/check_contracts.py",
