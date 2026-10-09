@@ -60,8 +60,13 @@ class AgentNodes:
         if state["model_calls"] >= self.config.budgets.max_decisions:
             return {"result": {"outcome": "failed", "reason": "decision_budget_exceeded"}, "status": "failed"}
         tools = tuple(TOOL_CONTRACTS.values())
+        context_state = state | {"facts": state["facts"] | {
+            "business_time": self.rules.business_time.isoformat(),
+            "business_rule_refs": {name: self.rules.reference(name).model_dump(mode="json")
+                                   for name in ("request_refund", "issue_coupon", "create_handoff")},
+        }}
         try:
-            messages = model_context(state, self.config.prompt, tools=tools, max_bytes=self.config.budgets.max_context_bytes)
+            messages = model_context(context_state, self.config.prompt, tools=tools, max_bytes=self.config.budgets.max_context_bytes)
         except ContextError as error:
             return {"result": {"outcome": "failed", "reason": str(error)}, "status": "failed"}
         reply = await self.model.generate(messages, tools=tools)

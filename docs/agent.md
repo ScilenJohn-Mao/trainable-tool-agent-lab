@@ -82,3 +82,8 @@ async with open_checkpoints("artifacts/runtime/checkpoints.sqlite3",
 
 Application writes and graph checkpoints use separate transactions. Crash
 recovery between these transactions is not implemented by this saver alone.
+
+Model input includes the fixed business clock and current business_rule_refs
+for each write tool. Use the matching rule reference in action policy_refs;
+retrieved policy documents remain separate explanatory citations. These
+references do not grant approval, and the executor rechecks the specification.
