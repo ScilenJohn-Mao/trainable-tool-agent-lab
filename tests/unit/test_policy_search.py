@@ -169,8 +169,58 @@ def test_bm25_frequency_length_normalization_and_deterministic_ties() -> None:
     assert [hit.reference.policy_id for hit in tied.search_policy(SearchPolicyArgs(query="refund")).hits] == ["P-A", "P-B"]
 
 
-def test_baseline_tokenization_preserves_chinese_latin_and_amounts() -> None:
-    assert tokenize("退款 CNY paid_amount_minor ５００") == ("退", "款", "退款", "cny", "paid_amount_minor", "500")
+def test_tokenization_preserves_business_words_latin_and_amounts() -> None:
+    assert tokenize("退款 CNY paid_amount_minor ５００") == ("退款", "cny", "paid_amount_minor", "500")
+
+
+def test_chinese_segmentation_keeps_terms_unknown_bigrams_and_negation() -> None:
+    assert tokenize("请问我的退款金额是否可以确认") == ("退款", "金额", "确认")
+    assert tokenize("超时响应丢失不确定转人工") == ("超时", "响应", "丢失", "不确定", "转人工")
+    assert tokenize("售后风控") == ("售后", "后风", "风控")
+    assert tokenize("不退款") == ("不", "退款")
+    assert tokenize("请问！？") == ()
+
+
+def test_unrelated_word_does_not_retrieve_refund_policies_by_one_character(engine: PolicySearch) -> None:
+    assert engine.search_policy(SearchPolicyArgs(query="退市")).hits == ()
+    assert engine.search_policy(SearchPolicyArgs(query="请问是否可以")).hits == ()
+    expected = engine.search_policy(SearchPolicyArgs(query="退款金额实付12900分"))
+    natural = engine.search_policy(SearchPolicyArgs(query="请问我的退款金额实付12900分是否可以"))
+    assert natural.hits == expected.hits
+
+
+@pytest.mark.parametrize("excluded_by", ["category", "version", "time"])
+def test_excluded_documents_do_not_change_filtered_bm25_scores(excluded_by: str) -> None:
+    eligible = copy.deepcopy(RAW["documents"][0])
+    eligible.update(policy_id="P-ELIGIBLE", title="Policy", sections=[{"section_id": "clause", "text": "refund damage"}])
+    excluded = copy.deepcopy(eligible)
+    excluded.update(policy_id="P-EXCLUDED", sections=[{"section_id": "clause", "text": "refund " * 20}])
+    if excluded_by == "category":
+        excluded["category"] = "digital_goods"
+    elif excluded_by == "version":
+        excluded["version"] = "other-version"
+    else:
+        excluded["effective_to"] = CLOCK.isoformat()
+    args = SearchPolicyArgs(query="refund", category="general_goods", version="mock-policy-v1")
+    alone = PolicySearch(PolicyCatalog(format_version=1, documents=[eligible]), business_time=CLOCK)
+    mixed = PolicySearch(PolicyCatalog(format_version=1, documents=[eligible, excluded]), business_time=CLOCK)
+    assert mixed.search_policy(args).hits == alone.search_policy(args).hits
+
+
+@pytest.mark.parametrize(("clock", "version", "category", "expected_ids"), [
+    ("2026-09-01T00:00:00+08:00", "mock-policy-v1", "digital_goods", {"P-DIGITAL-HANDOFF"}),
+    ("2026-09-17T04:00:00+00:00", "mock-policy-v1", "digital_goods", {"P-DIGITAL-HANDOFF"}),
+    ("2026-09-17T12:00:00+08:00", "mock-policy-v1", "all", set()),
+    ("2026-10-01T00:00:00+08:00", "mock-policy-v1", "digital_goods", set()),
+    ("2026-09-17T12:00:00+08:00", "mock-policy-v0", "digital_goods", set()),
+    ("2026-09-17T12:00:00+08:00", "mock-policy-v2", "digital_goods", set()),
+    ("2026-09-17T12:00:00+08:00", "mock-policy-v1", "unknown", set()),
+])
+def test_category_time_and_version_filters_apply_together(clock, version, category, expected_ids) -> None:
+    engine = PolicySearch.from_data_dir(DATA, business_time=datetime.fromisoformat(clock))
+    result = engine.search_policy(SearchPolicyArgs(query="数字", category=category, version=version, limit=10))
+    assert {hit.reference.policy_id for hit in result.hits} == expected_ids
+    assert all(hit.reference.version == version for hit in result.hits)
 
 
 @pytest.mark.parametrize(("arguments", "model"), [

@@ -19,15 +19,51 @@ from tool_agent_lab.tools.contracts import (
 K1 = 1.2
 B = 0.75
 TOKEN_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+|[a-z0-9_]+")
+CHINESE_TERMS = frozenset("""
+退款 补偿 确认 提案 订单 金额 实付 全额 延迟 物流 数字 商品 实物 损坏
+破损 碎裂 核实 收货 到货 期限 超期 七天 小时 政策 版本 生效 有效
+时间 条款 人工 转人工 澄清 缺失 查询 操作 账本 结果 状态 成功 失败
+重复 幂等 超时 响应 丢失 不确定 授权 拒绝 批准 修改 参数 运费 币种
+整数 固定 发放 平台 原因 事实 记录
+""".split())
+STOP_WORDS = frozenset("请 请问 我 我的 的 了 是 是否 可以 怎么 如何".split())
+CHINESE_WORDS = CHINESE_TERMS | STOP_WORDS
+MAX_WORD_LENGTH = max(map(len, CHINESE_WORDS))
+
+
+def _chinese_tokens(run: str) -> list[str]:
+    tokens, unknown = [], []
+
+    def flush_unknown() -> None:
+        text = "".join(unknown)
+        if len(text) == 1:
+            tokens.append(text)
+        else:
+            tokens.extend(text[index:index + 2] for index in range(len(text) - 1))
+        unknown.clear()
+
+    index = 0
+    while index < len(run):
+        word = next((run[index:index + size] for size in range(min(MAX_WORD_LENGTH, len(run) - index), 0, -1)
+                     if run[index:index + size] in CHINESE_WORDS), None)
+        if word is None:
+            unknown.append(run[index])
+            index += 1
+            continue
+        flush_unknown()
+        if word not in STOP_WORDS:
+            tokens.append(word)
+        index += len(word)
+    flush_unknown()
+    return tokens
 
 
 def tokenize(text: str) -> tuple[str, ...]:
-    """Use Chinese characters/bigrams and lowercase Latin identifiers/numbers."""
+    """Segment after-sales terms, retain unknown bigrams and normalize identifiers."""
     tokens = []
     for run in TOKEN_RUN.findall(unicodedata.normalize("NFKC", text).lower()):
         if "\u3400" <= run[0] <= "\u9fff":
-            tokens.extend(run)
-            tokens.extend(run[index:index + 2] for index in range(len(run) - 1))
+            tokens.extend(_chinese_tokens(run))
         else:
             tokens.append(run)
     return tuple(tokens)
@@ -40,7 +76,6 @@ class PolicySearch:
         self.catalog = catalog
         self.business_time = business_time
         self._entries = []
-        self._document_frequency = Counter()
         for record in catalog.documents:
             if not record.effective_from <= business_time < record.effective_to:
                 continue
@@ -48,11 +83,6 @@ class PolicySearch:
                 document = record.document(section.section_id)
                 counts = Counter(tokenize(f"{document.title}\n{document.text}"))
                 self._entries.append((document, counts, counts.total()))
-                self._document_frequency.update(counts.keys())
-        self._average_length = (
-            sum(length for _, _, length in self._entries) / len(self._entries)
-            if self._entries else 0.0
-        )
 
     @classmethod
     def from_data_dir(cls, data_dir: str | Path, *, business_time: datetime | None = None) -> "PolicySearch":
@@ -64,20 +94,23 @@ class PolicySearch:
 
     def search_policy(self, args: SearchPolicyArgs) -> PolicySearchResult:
         terms = set(tokenize(args.query))
-        hits = []
-        total = len(self._entries)
         categories = {args.category, "all"} if args.category in {"general_goods", "digital_goods"} else {args.category}
-        for document, counts, length in self._entries:
-            if args.category is not None and document.category not in categories:
-                continue
-            if args.version is not None and document.reference.version != args.version:
-                continue
+        candidates = [(document, counts, length) for document, counts, length in self._entries
+                      if (args.category is None or document.category in categories)
+                      and (args.version is None or document.reference.version == args.version)]
+        if not terms or not candidates:
+            return PolicySearchResult(query=args.query, hits=())
+        total = len(candidates)
+        average_length = sum(length for _, _, length in candidates) / total
+        document_frequency = Counter(term for _, counts, _ in candidates for term in counts)
+        hits = []
+        for document, counts, length in candidates:
             score = 0.0
             for term in sorted(terms & counts.keys()):
                 frequency = counts[term]
-                df = self._document_frequency[term]
+                df = document_frequency[term]
                 idf = math.log1p((total - df + 0.5) / (df + 0.5))
-                normalizer = K1 * (1 - B + B * length / self._average_length)
+                normalizer = K1 * (1 - B + B * length / average_length)
                 score += idf * frequency * (K1 + 1) / (frequency + normalizer)
             if score > 0:
                 hits.append(PolicyHit(
