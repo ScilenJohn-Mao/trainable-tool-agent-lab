@@ -79,8 +79,12 @@ class ToolExecutor:
             context = self.context if contract.read_only else self._prepare(action)
         except (BusinessError, ValidationError) as error:
             code = error.code if isinstance(error, BusinessError) else "invalid_arguments"
+            message = code if isinstance(error, BusinessError) else code + ": " + "; ".join(
+                ".".join(map(str, item["loc"])) + ": " + item["msg"]
+                for item in error.errors(include_url=False, include_input=False)
+            )
             result = ToolFailure(call_id=call_id, status="error", error=ToolError(
-                code=code, message=code, outcome="not_committed",
+                code=code, message=message, outcome="not_committed",
             ))
             return ToolReply(raw=types.CallToolResult(
                 content=[types.TextContent(type="text", text=result.model_dump_json())],

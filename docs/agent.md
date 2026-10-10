@@ -43,7 +43,10 @@ Displayed monetary summaries come from those rows. The model's draft remains
 in the conversation trace, so an invented amount cannot replace the receipt.
 Retrieved document citations and authorization rule references are separate.
 Invalid conclusion shapes, generation truncation and budget stops produce an
-explicit failed result. These results are graph state, not yet an API endpoint.
+explicit failed result, available in task details. A length/timeout stop retains
+the returned assistant message and full ModelReply (including token usage and
+finish reason) in checkpoint state for diagnosis; stopped tool calls are not
+dispatched.
 
 Model-visible context preserves the original request, latest complete turn,
 order amounts, committed operation keys, human decisions, input receipts and

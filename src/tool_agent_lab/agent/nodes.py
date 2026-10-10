@@ -76,9 +76,12 @@ class AgentNodes:
             return {"result": {"outcome": "failed", "reason": str(error)}, "status": "failed"}
         reply = await self.model.generate(messages, tools=tools)
         updates = {"model_calls": state["model_calls"] + 1}
-        if reply.finish_reason in ("length", "timeout"):
-            return updates | {"result": {"outcome": "failed", "reason": "model_" + reply.finish_reason}, "status": "failed"}
         messages = state["messages"] + [reply.message.as_message()]
+        if reply.finish_reason in ("length", "timeout"):
+            return updates | {"messages": messages, "result": {
+                "outcome": "failed", "reason": "model_" + reply.finish_reason,
+                "model_reply": reply.model_dump(mode="json"),
+            }, "status": "failed"}
         if len(reply.message.tool_calls) > self.config.budgets.max_tool_calls_per_turn:
             return updates | {"messages": messages, "result": {"outcome": "failed", "reason": "tool_call_budget_exceeded"}, "status": "failed"}
         if reply.message.tool_calls:

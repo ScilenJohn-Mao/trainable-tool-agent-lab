@@ -26,6 +26,16 @@ def call(executor, name, values, call_id="call-1"):
     return reply.result
 
 
+def test_missing_order_argument_reports_field_reason_without_executing(case):
+    path, rules, tasks, identity, executor = case
+    result = call(executor, "get_order", {"order_id": ""})
+    assert result.error.code == "invalid_arguments"
+    assert "order_id" in result.error.message and "at least 1 character" in result.error.message
+    assert result.error.outcome == "not_committed"
+    with connect(path) as connection:
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
+
+
 @pytest.mark.parametrize("name", ["request_refund", "issue_coupon", "create_handoff"])
 def test_approved_real_mcp_writes_and_new_executor_reuse_original_key(case, name):
     path, rules, tasks, identity, executor = case

@@ -16,6 +16,11 @@ proposal and confirmation, reuses the operation associated with that confirmatio
 generates a UUID key, then calls BusinessService.prepare. The pending key commits
 before starting the MCP subprocess; money and confirmation remain unchanged there.
 
+Invalid model arguments return `invalid_arguments` with the failing field and its
+validation reason in `error.message`, without echoing input values. For example,
+an empty order ID reports that `order_id` requires at least one character. It does
+not substitute an order ID or relax the shared argument schema.
+
 The child receives ExecutionContext in its startup environment (TTAL_MCP_CONTEXT),
 separate from MCP arguments and metadata. TTAL_MCP_CLARIFIED carries the runtime's
 clarification fact. The standard client does not inherit either reserved variable;
