@@ -14,7 +14,10 @@ from tool_agent_lab.agent.context import ContextError, bounded_tool_result, mode
 from tool_agent_lab.agent.inputs import InputService
 from tool_agent_lab.agent.state import AgentState, identity_of
 from tool_agent_lab.business.rules import BusinessRules
+from tool_agent_lab.knowledge.citations import validate_citation
+from tool_agent_lab.knowledge.ingest import PolicyCatalog
 from tool_agent_lab.runtime.task_service import TaskError, change_status, load_current_attempt
+from tool_agent_lab.schemas.actions import PolicyReference
 from tool_agent_lab.schemas.common import NonEmptyStr
 from tool_agent_lab.schemas.results import ConclusionDraft, QuestionDraft, build_result
 from tool_agent_lab.schemas.tasks import TaskStatus
@@ -31,8 +34,10 @@ class AgentNodes:
     rules: BusinessRules
     model: ModelClient
     config: AgentConfig = field(default_factory=load_agent_config)
+    policy_catalog: PolicyCatalog = field(init=False)
 
     def __post_init__(self) -> None:
+        self.policy_catalog = PolicyCatalog.from_file(self.data_dir / "policies.json")
         values = self.model.config.model_dump()
         values['api_key'] = self.model.config.api_key
         values['max_tokens'] = min(self.model.config.max_tokens, self.config.budgets.max_tokens)
@@ -157,7 +162,13 @@ class AgentNodes:
             elif name == "get_operation":
                 facts["operation_lookups"] = dict(facts.get("operation_lookups", {})) | {data["operation_key"]: data}
             elif name in ("search_policy", "read_policy"):
-                refs = [hit["reference"] for hit in data["hits"]] if name == "search_policy" else [data["reference"]]
+                evidence = (
+                    [(hit["reference"], hit["excerpt"]) for hit in data["hits"]]
+                    if name == "search_policy" else [(data["reference"], data["text"])]
+                )
+                refs = [validate_citation(
+                    self.policy_catalog, PolicyReference.model_validate(ref), excerpt=text,
+                ).reference.model_dump(mode="json") for ref, text in evidence]
                 update["citations"] = list({json.dumps(ref, sort_keys=True): ref for ref in state["citations"] + refs}.values())
             update["facts"] = facts
         if result["status"] == "ok" and not TOOL_CONTRACTS[call["function"]["name"]].read_only:
@@ -185,7 +196,7 @@ class AgentNodes:
                 "clarification_attempted": True, "waiting": None, "status": "running"}
 
     def finish(self, state: AgentState) -> dict:
-        result = build_result(state, self.database)
+        result = build_result(state, self.database, policy_catalog=self.policy_catalog)
         status = TaskStatus.FAILED if state["status"] == "failed" else TaskStatus.COMPLETED
         self.status(state, status)
         return {"status": status.value, "result": result.model_dump(mode="json")}

@@ -10,6 +10,29 @@
 找不到文档、版本或条款时抛出 `KeyError`，不会替换为其他版本。
 显式读取允许查看旧版/未来版；结果有效期仍须由调用方核对。
 
+## 引用定位与校验
+
+`knowledge.citations.validate_citation(catalog, reference, ...)` 接受共享
+`PolicyReference`，按 policy_id/version/section 回读原始 `PolicyDocument`。
+版本和条款必须明确存在，有效期必须与该版本一致；没有版本回退，也不会把
+条款 ID 当作文本偏移。`section="/"` 定位带条款标记的完整文档。
+可选 `excerpt` 必须等于定位条款的完整原文（或 `/` 的标记全文），不自动修剪、
+归一化或接受模型改写。返回的引用、标题、品类和文本均来自政策目录。
+
+默认允许定位历史/未来政策。提供带时区的 `business_time` 时，另检查
+`[effective_from, effective_to)`；提供 `category` 时，检查品类与检索相同的
+规则：具体品类包含通用 all，all 仅通用，未知品类拒绝。
+`CitationError.code` 为 `citation_not_found`、`citation_interval_mismatch`、
+`citation_excerpt_mismatch`、`citation_not_active` 或 `citation_category_mismatch`。
+不带时区的业务时间抛出 `ValueError`。
+
+Agent 收集搜索/读取证据时核对原文与引用，生成结构化结果时再核对保存的引用。
+显式历史读取在结果中保留原版本与有效期，不能据此认为政策当前适用。
+这些检查确认出处和适用范围，不判断文字是否支持某个结论，也不授予退款权限。
+业务规则引用 `R-*` 不属于政策文档目录，仍由业务服务单独校验。
+
+## 检索
+
 `knowledge.search.PolicySearch.from_data_dir(data_dir, business_time=None)` 导入政策，
 默认从同目录 `spec.json` 读取固定业务时间；可由运行时传入带时区的仿真时间。
 每个实例按该时间建立内存条款索引，适用区间是 `[effective_from, effective_to)`。
@@ -60,17 +83,19 @@ Python 示例：
 
 ```python
 from tool_agent_lab.knowledge.search import PolicySearch
+from tool_agent_lab.knowledge.citations import validate_citation
 from tool_agent_lab.settings import load_settings
-from tool_agent_lab.tools.contracts import ReadPolicyArgs, SearchPolicyArgs
+from tool_agent_lab.tools.contracts import SearchPolicyArgs
 
 engine = PolicySearch.from_data_dir(load_settings().business_data_dir)
-result = engine.search_policy(SearchPolicyArgs(query="延迟补偿券固定500分", limit=3))
+result = engine.search_policy(SearchPolicyArgs(
+    query="延迟补偿券固定500分", category="general_goods", limit=3,
+))
 for hit in result.hits:
-    document = engine.catalog.read_policy(ReadPolicyArgs(
-        policy_id=hit.reference.policy_id,
-        version=hit.reference.version,
-        section=hit.reference.section,
-    ))
+    document = validate_citation(
+        engine.catalog, hit.reference, excerpt=hit.excerpt,
+        business_time=engine.business_time, category="general_goods",
+    )
     assert document.text == hit.excerpt
     print(document.reference.model_dump_json(), document.text)
 ```

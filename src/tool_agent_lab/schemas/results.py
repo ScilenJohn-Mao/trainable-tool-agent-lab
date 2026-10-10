@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import Field, JsonValue
 
+from tool_agent_lab.knowledge.citations import validate_citation
+from tool_agent_lab.knowledge.ingest import PolicyCatalog
 from tool_agent_lab.schemas.actions import PolicyReference
 from tool_agent_lab.schemas.business import Operation
 from tool_agent_lab.schemas.common import ContractModel, NonEmptyStr
@@ -34,7 +36,7 @@ class AgentResult(ContractModel):
     failure_reason: str | None = None
 
 
-def build_result(state: dict, database: str | Path) -> AgentResult:
+def build_result(state: dict, database: str | Path, *, policy_catalog: PolicyCatalog) -> AgentResult:
     from tool_agent_lab.runtime.task_service import TaskError
     from tool_agent_lab.storage.business_repository import BusinessRepository
     from tool_agent_lab.storage.database import connect
@@ -80,6 +82,8 @@ def build_result(state: dict, database: str | Path) -> AgentResult:
     return AgentResult(
         task_id=identity.task_id, attempt_id=identity.attempt_id, model_version=identity.model_version,
         outcome=outcome, summary=summary, operations=tuple(operations), facts=facts,
-        policy_citations=tuple(PolicyReference.model_validate(ref) for ref in state["citations"]),
+        policy_citations=tuple(validate_citation(
+            policy_catalog, PolicyReference.model_validate(ref),
+        ).reference for ref in state["citations"]),
         rule_refs=tuple({ref.model_dump_json(): ref for ref in rule_refs}.values()), failure_reason=failure,
     )
