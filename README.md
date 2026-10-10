@@ -265,8 +265,17 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_busin
 
 `PolicyCatalog` 导入版本化政策并按 ID/版本/section 读取原文；`PolicySearch` 按
 固定业务时间建立内存 BM25 条款索引，返回带版本、有效期和位置的证据。
-支持品类、版本与条数限制，中文采用字符及相邻双字切分，不需要模型或额外依赖。
+支持品类、版本与条数限制，中文采用售后词表及未知片段双字切分，不需要模型或额外依赖。
 接口、完整文档读取与历史版本语义见[政策说明](docs/policies.md)。
+
+使用 50 条带依据查询实测检索，无需加载模型：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/evaluate_retrieval.py --output artifacts/runtime/retrieval-baseline/report.json
+```
+
+终端显示 Recall@1/3/5/10 和版本分组；完整 JSON 保存逐查询排名、漏检条款、
+原文引用校验及输入/代码指纹。指标口径和参数见[检索评测说明](data/retrieval/README.md)。
 
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.knowledge.search search "延迟补偿券固定500分" --category general_goods --limit 3

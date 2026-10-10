@@ -41,3 +41,25 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q -p no:cacheprovider t
 输入检索时只传 query/category/version，并用 business_time 构造检索实例。
 `expected`、rationale 和 tags 留在评测侧，不传给模型或加入政策索引。
 查询和标注不能代替人工确认、业务规则或真实训练轨迹。
+
+运行检索评测并保存可查看的 UTF-8 JSON 报告：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/evaluate_retrieval.py --output artifacts/runtime/retrieval-baseline/report.json
+```
+
+默认计算 k=1/3/5/10，可用 `--k 1 5` 选择 1–10 中的值。
+`--queries`、`--policies` 可指定其他文件；显式路径相对于当前工作目录，
+不传 `--output` 时将完整报告输出到终端。无需启动 API、worker 或加载模型。
+
+`summary` 给出正例宏平均 Recall、按条款总数计算的微平均 Recall、完整命中查询数，
+以及单独的无依据查询空结果比例。`by_expected_version` 和 `by_tag` 保留分组结果；
+标签可以重叠，各组不能相加当作样本总数。每条 `queries` 保存排名、分数、完整条款原文、
+各 k 的漏检条款与引用错误。命中须精确匹配 policy_id/version/section，版本正确但条款不相关
+不能算作命中。`returned_versions` 统计最大 k 的返回版本，`version_filter_violations`
+列出违反显式版本过滤的返回项。引用检查复用原文、有效时间和品类校验，
+只表示出处及适用性正确，不保证语义支持或业务授权；失败项仍保留在报告中。
+
+`inputs` 保存查询、政策、检索、引用、语料加载及评测代码的 SHA-256，
+便于比较时核对输入与实现。报告是这份小型已标注语料的检索基线，
+不能代替真实模型或业务流程验收，也不计算缺少完整相关性标注的 Precision。
