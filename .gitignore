@@ -31,6 +31,7 @@ artifacts/
 *.sqlite3
 *.sqlite3-*
 *.log
+*.worker.lock
 *.safetensors
 *.pt
 *.pth

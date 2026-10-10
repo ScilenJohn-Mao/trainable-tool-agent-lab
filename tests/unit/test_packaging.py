@@ -81,6 +81,7 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "data/business/runtime.sqlite3-wal": "ignore",
         "data/business/runtime.sqlite3-shm": "ignore",
         "data/business/runtime.log": "ignore",
+        "data/business/runtime.sqlite3.worker.lock": "ignore",
         "training/art/custom-env/pyvenv.cfg": "home = unused",
         "training/art/checkpoints/step-1/config.json": "ignore",
         "scripts/previous.zip": "ignore",

@@ -21,7 +21,8 @@ For a clarification, the model returns
 For a final response, it returns `{"kind":"final","summary":"..."}`.
 Tool requests retain their call IDs, and each gets a matching tool message.
 Use an explicit `InMemorySaver` only for development; it cannot survive restart.
-The graph is not yet connected to the application API, worker or page.
+The independent [worker](worker.md) invokes this graph; API model-version
+routing and the page are not connected yet.
 
 Supplemental input uses `InputRequest(request_id=..., input_request_id=...,
 message=...)` and `agent.submit_input(task_id, request, owner_id=...)`. Copy

@@ -83,7 +83,8 @@ an arbitrary ART checkpoint is a compatible exported PEFT adapter.
 
 The CLI and Python boundary are implemented. Actual 3B tool behavior, GPU memory,
 speed and Windows/Linux adapter compatibility still require real model runs;
-the Agent graph, worker and UI are not connected yet.
+the shared Agent graph and [independent worker](worker.md) can use this client.
+The UI and HTTP model-version routing are not connected yet.
 
 API references: [Qwen's tokenizer template](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/tokenizer_config.json),
 [Transformers chat templates](https://huggingface.co/docs/transformers/v4.57.3/chat_templating),

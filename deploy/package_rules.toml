@@ -40,6 +40,7 @@ required_files = [
   "src/tool_agent_lab/runtime/task_service.py", "src/tool_agent_lab/runtime/approvals.py",
   "apps/__init__.py", "apps/api/__init__.py", "apps/api/routes/__init__.py",
   "apps/api/main.py", "apps/api/dependencies.py", "apps/api/routes/tasks.py", "docs/http_api.md",
+  "apps/worker/__init__.py", "apps/worker/main.py", "apps/worker/runner.py", "docs/worker.md",
   "src/tool_agent_lab/tools/__init__.py", "src/tool_agent_lab/tools/contracts.py",
   "src/tool_agent_lab/tools/executor.py", "docs/executor.md",
   "src/tool_agent_lab/tools/server.py", "src/tool_agent_lab/tools/client.py", "docs/mcp.md",
@@ -70,7 +71,7 @@ exclude_files = [
   "credentials.*", "secrets.*",
   "*.pyc", "*.pyo", "*.pyd", "*.egg-info",
   "*.db", "*.db-*", "*.sqlite", "*.sqlite-*", "*.sqlite3", "*.sqlite3-*",
-  "*.log", "*.safetensors", "*.pt", "*.pth", "*.ckpt", "*.bin",
+  "*.log", "*.worker.lock", "*.safetensors", "*.pt", "*.pth", "*.ckpt", "*.bin",
   "*.zip", "*.zip.sha256", "*.tar", "*.tar.*", "*.tgz", "*.7z",
 ]
 

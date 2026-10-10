@@ -21,7 +21,7 @@ uv run --no-sync --cache-dir .uv-cache python scripts/demo_business.py --decisio
 
 拒绝输出 `status=rejected`、`operation=null`，订单金额不变。提案和提示在 stderr，结果 JSON 在 stdout；这是固定订单的手工工具流程。完整命令和错误语义见[退款演示](docs/business_demo.md)。
 
-需要 HTTP 时按下文[HTTP 任务与确认服务](#http-任务与确认服务)启动；源码上传、服务器启动和版本切换见[部署说明](deploy/README.md)。HTTP 提供任务/确认记录，自动模型和 worker 执行流程尚未接入。
+需要 HTTP 时按下文[HTTP 任务与确认服务](#http-任务与确认服务)启动；源码上传、服务器启动和版本切换见[部署说明](deploy/README.md)。HTTP 提供任务/确认记录，独立 worker 已可执行共享 Agent 图，HTTP 创建和输入仍需对接模型版本配置；用法见[worker 说明](docs/worker.md)。
 
 版本化政策位于 `data/business/v1/policies.json`，共 24 份，涵盖当前规则、品类差异及旧版/未来版对照；来源规格与引用方式见[业务数据说明](data/business/v1/README.md#政策文档与引用)。政策一致性检查：
 
@@ -80,7 +80,7 @@ trainable-tool-agent-lab/
 
 应用的直接推理方式采用 Transformers + PEFT，在每台机器的 worker 内加载本机文件；不要求远程模型服务、服务器 IP、Ollama 或 vLLM。以 3B 的 4-bit、单请求、2K–4K 总上下文及最多 512 个输出 token 为初始验证配置，实际显存和工具效果须实测。模型、依赖及前端资源准备齐全后，加载使用本地路径与离线选项；浏览器到同机 API 的 HTTP/SSE 不需要外网。
 
-客户端支持 `local`、`mock` 和兼容 HTTP 三种入口；`local` 直接加载本机基座与可选 PEFT adapter，不调用模型 HTTP。当前可通过 CLI 调用，Agent 图、worker 和页面尚未接入。真实 3B/GPU 与训练 adapter 的两端效果仍须实测；轻量测试中的模型替身不能代替它们。完整参数与消息历史用法见[模型客户端说明](docs/models.md)。
+客户端支持 `local`、`mock` 和兼容 HTTP 三种入口；`local` 直接加载本机基座与可选 PEFT adapter，不调用模型 HTTP。当前可通过 CLI 调用，共享 Agent 图与独立 worker 已可调用该接口，页面尚未接入；启动方法见[worker 说明](docs/worker.md)。真实 3B/GPU 与训练 adapter 的两端效果仍须实测；轻量测试中的模型替身不能代替它们。完整参数与消息历史用法见[模型客户端说明](docs/models.md)。
 
 在项目根目录准备独立推理环境（Windows，使用已有 Python 3.12 解释器）：
 
