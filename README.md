@@ -73,6 +73,27 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/e2e/test_ticket
 
 该测试自动启动隔离 API、worker 和页面，验证批准、拒绝、取消、刷新及窄屏布局，不接现有业务库。`npm --prefix frontend run test:e2e` 则使用已启动的服务，默认地址为 `http://127.0.0.1:5173`。
 
+## 通过 API 演示 Agent
+
+先按上面的步骤使用新运行目录初始化数据库，并启动 API 与 worker。无需启动前端，另开终端在项目根目录执行：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/demo_agent.py --output artifacts/runtime/agent-receipt.json
+```
+
+脚本创建一个未提供订单号的到货损坏工单，在实际澄清等待点补充 `ORD-1001`，展示 worker 产生的完整提案，然后等待输入 `approved` 或 `rejected`。没有有效的操作者决定不会批准。也可由操作者在命令中明确选择首次提案的决定：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python scripts/demo_agent.py --decision approved --output artifacts/runtime/agent-approved.json
+uv run --no-sync --cache-dir .uv-cache python scripts/demo_agent.py --decision rejected --output artifacts/runtime/agent-rejected.json
+```
+
+批准与拒绝示例应分别使用新数据库；固定 mock 演示的 ORD-1001 只能退款一次。`--base-url` 指向应用 API，默认 `http://127.0.0.1:8000`，不是模型服务地址。脚本不加载模型、不直接访问业务库，也不启动 API 或 worker；同一脚本可配合本机真实模型 worker，模型行为由运行中的 worker 决定。
+
+stdout 与可选输出文件是 UTF-8 JSON，包含实际模型/配置版本、工单/图线程 ID、补充输入和确认回执、状态及 API 返回的最终结果。`task.result.operations` 中的金额和操作键才表示已提交业务；`finish_reason=completed` 仅表示工单有最终结果，模型也可能只完成事实核对而没有退款。
+
+默认轮询预算为 60 秒，人工输入等待不计入，可用 `--timeout 180` 调整。失败、超时、没有操作者输入或再次要求补充/确认时返回非零退出码，并保存当前可见状态；不取消工单、不重发写请求、不自动批准额外提案。HTTP/文件错误打印到 stderr；创建成功时 stderr 会先给出工单 ID，后续可从工作台核对。
+
 ## 快速运行
 
 以下命令从项目根目录执行。先准备下文的 Python 3.12 轻量环境，再运行手工退款演示：
