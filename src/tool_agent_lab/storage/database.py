@@ -10,8 +10,9 @@ from typing import Iterator
 
 from tool_agent_lab.settings import load_settings
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 INITIAL_MIGRATION = Path(__file__).with_name("migrations") / "001_initial.sql"
+EXECUTION_MIGRATION = Path(__file__).with_name("migrations") / "002_execution.sql"
 
 
 def require_transaction(connection: sqlite3.Connection) -> None:
@@ -46,26 +47,29 @@ def transaction(database_path: str | Path) -> Iterator[sqlite3.Connection]:
 
 
 def initialize_database(database_path: str | Path) -> int:
-    """Apply the initial migration atomically; repeated initialization preserves records."""
+    """Apply pending migrations atomically; repeated initialization preserves records."""
     path = Path(database_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with transaction(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         if version == SCHEMA_VERSION:
             return version
-        if version != 0:
+        if version < 0 or version > SCHEMA_VERSION:
             raise ValueError(f"Unsupported database schema version: {version}")
 
         # executescript would commit the active transaction before running the SQL.
-        statement = ""
-        for line in INITIAL_MIGRATION.read_text(encoding="utf-8").splitlines(keepends=True):
-            statement += line
-            if sqlite3.complete_statement(statement):
-                connection.execute(statement)
-                statement = ""
-        if statement.strip():
-            raise ValueError("Incomplete SQL statement in initial migration")
-        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        for target, migration in ((1, INITIAL_MIGRATION), (2, EXECUTION_MIGRATION)):
+            if target <= version:
+                continue
+            statement = ""
+            for line in migration.read_text(encoding="utf-8").splitlines(keepends=True):
+                statement += line
+                if sqlite3.complete_statement(statement):
+                    connection.execute(statement)
+                    statement = ""
+            if statement.strip():
+                raise ValueError(f"Incomplete SQL statement in {migration.name}")
+            connection.execute(f"PRAGMA user_version = {target}")
     return SCHEMA_VERSION
 
 

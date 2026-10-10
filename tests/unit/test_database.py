@@ -74,7 +74,7 @@ def insert_operation(
 @pytest.fixture
 def db_path(tmp_path: Path) -> Path:
     path = tmp_path / "runtime" / "app.sqlite3"
-    assert database.initialize_database(path) == 1
+    assert database.initialize_database(path) == 2
     with database.transaction(path) as connection:
         insert_order(connection)
         insert_task(connection)
@@ -83,10 +83,10 @@ def db_path(tmp_path: Path) -> Path:
 
 
 def test_reinitialization_preserves_records_and_separates_checkpoint(db_path: Path) -> None:
-    assert database.initialize_database(db_path) == 1
+    assert database.initialize_database(db_path) == 2
     with database.connect(db_path) as connection:
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
         assert connection.execute("SELECT paid_amount_minor FROM orders").fetchone()[0] == 12900
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     assert not db_path.with_name("checkpoints.sqlite3").exists()
@@ -108,11 +108,11 @@ def test_failed_migration_rolls_back_ddl_and_version(tmp_path: Path, monkeypatch
 
 def test_unsupported_version_is_preserved(db_path: Path) -> None:
     with database.connect(db_path) as connection:
-        connection.execute("PRAGMA user_version = 2")
-    with pytest.raises(ValueError, match="version: 2"):
+        connection.execute("PRAGMA user_version = 3")
+    with pytest.raises(ValueError, match="version: 3"):
         database.initialize_database(db_path)
     with database.connect(db_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 1
 
 
@@ -251,5 +251,90 @@ def test_cli_from_other_directory_reinitializes_unicode_path(tmp_path: Path) -> 
             [sys.executable, "-m", "tool_agent_lab.storage.database", "--database", str(path)],
             cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", check=True,
         )
-        assert json.loads(result.stdout) == {"database": str(path), "schema_version": 1}
+        assert json.loads(result.stdout) == {"database": str(path), "schema_version": 2}
     assert not path.with_name("checkpoints.sqlite3").exists()
+
+
+def create_previous_database(path: Path) -> dict[str, list[tuple]]:
+    with database.connect(path) as connection:
+        connection.executescript(database.INITIAL_MIGRATION.read_text(encoding="utf-8"))
+        connection.execute("PRAGMA user_version = 1")
+    with database.transaction(path) as connection:
+        insert_order(connection)
+        insert_task(connection)
+        connection.execute("UPDATE tasks SET current_attempt_id = 'attempt-task-1', status = 'running'")
+        connection.execute("UPDATE attempts SET status = 'running'")
+        insert_approval(connection)
+        insert_operation(connection, status="pending")
+        connection.execute(
+            """INSERT INTO events (task_id, seq, attempt_id, owner_id, thread_id,
+                model_version, config_version, event_type, occurred_at)
+            VALUES ('task-1', 1, 'attempt-task-1', 'owner-1', 'thread-task-1',
+                'manual', 'app-v1', 'task_status_changed', ?)""", (NOW,),
+        )
+        return {table: [tuple(row) for row in connection.execute(f"SELECT * FROM {table}")]
+                for table in ("orders", "tasks", "attempts", "proposals", "approvals", "operations", "events")}
+
+
+def test_previous_database_upgrade_preserves_running_task_and_pending_operation(tmp_path: Path) -> None:
+    path = tmp_path / "previous.sqlite3"
+    previous = create_previous_database(path)
+    assert database.initialize_database(path) == 2
+    assert database.initialize_database(path) == 2
+    with database.connect(path) as connection:
+        for table, rows in previous.items():
+            current = [tuple(row) for row in connection.execute(f"SELECT * FROM {table}")]
+            if table == "attempts":
+                assert [row[:-4] for row in current] == rows
+                assert current[0][-4:] == (0, None, None, None)
+            else:
+                assert current == rows
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+@pytest.mark.parametrize("previous_version", [0, 1])
+def test_failed_execution_migration_rolls_back_columns_data_and_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, previous_version: int,
+) -> None:
+    path = tmp_path / "app.sqlite3"
+    if previous_version:
+        previous = create_previous_database(path)
+    migration = tmp_path / "broken_execution.sql"
+    migration.write_text(database.EXECUTION_MIGRATION.read_text(encoding="utf-8") + "INVALID SQL;\n", encoding="utf-8")
+    monkeypatch.setattr(database, "EXECUTION_MIGRATION", migration)
+    with pytest.raises(sqlite3.OperationalError):
+        database.initialize_database(path)
+    with database.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == previous_version
+        if previous_version:
+            assert "execution_epoch" not in {row[1] for row in connection.execute("PRAGMA table_info(attempts)")}
+            assert connection.execute("SELECT name FROM sqlite_master WHERE name='idx_attempts_lease_expiry'").fetchone() is None
+            for table, rows in previous.items():
+                assert [tuple(row) for row in connection.execute(f"SELECT * FROM {table}")] == rows
+        else:
+            assert connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == []
+
+
+def test_execution_lease_persists_and_release_retains_epoch(db_path: Path) -> None:
+    for update in (
+        "execution_epoch = -1",
+        "lease_worker_id = 'worker-1'",
+        "execution_epoch = 1, lease_worker_id = '', lease_expires_at = 'later', heartbeat_at = 'now'",
+        "lease_worker_id = 'worker-1', lease_expires_at = 'later', heartbeat_at = 'now'",
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            with database.transaction(db_path) as connection:
+                connection.execute(f"UPDATE attempts SET {update}")
+    with database.transaction(db_path) as connection:
+        connection.execute(
+            """UPDATE attempts SET execution_epoch=1, lease_worker_id='worker-1',
+                lease_expires_at=?, heartbeat_at=?""", ("2026-09-17T12:01:00+08:00", NOW),
+        )
+    assert database.initialize_database(db_path) == 2
+    with database.connect(db_path) as connection:
+        row = connection.execute("SELECT execution_epoch, lease_worker_id, lease_expires_at, heartbeat_at FROM attempts").fetchone()
+        assert tuple(row) == (1, "worker-1", "2026-09-17T12:01:00+08:00", NOW)
+    with database.transaction(db_path) as connection:
+        connection.execute("UPDATE attempts SET lease_worker_id=NULL, lease_expires_at=NULL, heartbeat_at=NULL")
+    with database.connect(db_path) as connection:
+        assert connection.execute("SELECT execution_epoch FROM attempts").fetchone()[0] == 1

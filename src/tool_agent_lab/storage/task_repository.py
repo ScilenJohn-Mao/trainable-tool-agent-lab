@@ -53,7 +53,8 @@ class TaskRepository:
 
     def get_attempt(self, task_id: str, attempt_id: str, owner_id: str) -> Attempt | None:
         row = self.connection.execute(
-            "SELECT * FROM attempts WHERE task_id = ? AND attempt_id = ? AND owner_id = ?",
+            """SELECT attempt_id, task_id, owner_id, thread_id, model_version, config_version,
+                status, created_at FROM attempts WHERE task_id = ? AND attempt_id = ? AND owner_id = ?""",
             (task_id, attempt_id, owner_id),
         ).fetchone()
         return Attempt.model_validate(dict(row)) if row is not None else None
