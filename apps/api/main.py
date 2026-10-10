@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from apps.api.routes.tasks import router
+from apps.api.routes.events import router as events_router
 from tool_agent_lab.agent.config import load_agent_config
 from tool_agent_lab.agent.inputs import InputService
 from tool_agent_lab.agent.model_client import load_model_config
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(title="Trainable Tool Agent Lab", version="0.1.0", lifespan=lifespan)
     application.state.settings = settings
     application.include_router(router)
+    application.include_router(events_router)
 
     @application.exception_handler(TaskError)
     async def task_error_handler(request: Request, error: TaskError) -> JSONResponse:

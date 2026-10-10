@@ -256,7 +256,8 @@ def test_http_storage_failure_rolls_back_decision_status_and_events(api):
 def test_openapi_exposes_shared_input_contracts(api):
     schema = api["client"].get("/openapi.json").json()
     assert set(schema["paths"]) == {"/tasks", "/tasks/{task_id}", "/tasks/{task_id}/proposal",
-                                   "/tasks/{task_id}/approval", "/tasks/{task_id}/input", "/tasks/{task_id}/cancel"}
+                                   "/tasks/{task_id}/approval", "/tasks/{task_id}/input", "/tasks/{task_id}/cancel",
+                                   "/tasks/{task_id}/events"}
     for name in ["TaskCreate", "ApprovalRequest", "InputRequest"]:
         assert schema["components"]["schemas"][name]["additionalProperties"] is False
         assert "owner_id" not in schema["components"]["schemas"][name]["properties"]

@@ -28,6 +28,7 @@ API 与独立 worker 使用相同配置和运行目录；默认选用 mock。真
 | POST | `/tasks/{task_id}/approval` | `ApprovalRequest`：request_id、proposal_id、proposal_version、decision；200 返回完整 `Approval` |
 | POST | `/tasks/{task_id}/input` | `InputRequest`：request_id、input_request_id、message；200 返回保存的输入回执 |
 | POST | `/tasks/{task_id}/cancel` | 无请求体；取消 queued/waiting_input/waiting_approval，200 返回 cancelled 任务 |
+| GET | `/tasks/{task_id}/events` | SSE，after_seq（≥0，默认 0）；按序发送持久化事件，终态排空后关闭 |
 
 `input_request` 在 waiting_input 状态返回 `{kind, request_id, question}`，其他状态为
 null。`attempt` 包含 thread_id、模型/Agent 配置版本和持久化状态。`result` 从该尝试的
@@ -93,4 +94,30 @@ Invoke-RestMethod -Method Post -Uri "$base/tasks/$($task.task_id)/cancel"
 取消同步写入任务、尝试及状态事件；重复取消直接返回原任务。running/completed/failed
 返回 409 `task_not_cancellable`，不强行中断正在执行的模型/工具，也不撤销已提交账本。
 取消后新的输入或确认无法恢复任务；已保存回执的精确重试仅返回历史回执。
-执行中的取消竞争、故障恢复与 SSE 重连另行提供。
+执行中的取消竞争与故障恢复另行提供。
+
+## SSE 执行进展
+
+```powershell
+curl.exe -N "$base/tasks/$($task.task_id)/events"
+```
+
+服务先核对任务归属，未知/其他归属返回 JSON 404；合法请求返回
+`text/event-stream`，默认从第一条已保存事件开始，之后每 0.5 秒查询新事件。
+每帧的 id 是任务内递增 seq，event 是共享 event_type，data 是完整 Event JSON：
+
+```text
+id: 1
+event: task_status_changed
+data: {"task_id":"...","seq":1,"event_type":"task_status_changed",...}
+
+```
+
+事件包括状态、补充输入、提案与决定、工具调用/结果，保留 thread、模型版本与
+call_id。等待人工输入/确认时连接保持打开，约每 15 秒发送 `: keep-alive` 注释；
+任务 completed/failed/cancelled 后发完已保存事件并关闭。客户端断开仅结束该流，
+不取消任务、不重新启动图。可用 `?after_seq=12` 只读取该序号之后的事件。
+终态结果从任务详情读取，完整提案从 proposal 接口读取。
+
+当前提供基本反馈和显式查询游标，不自动处理 Last-Event-ID、客户端重连或去重；
+这些恢复行为另行提供。SSE 读取与 worker 共用应用库，不建立另一套事件或执行路径。
