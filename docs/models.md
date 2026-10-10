@@ -40,7 +40,7 @@ bitsandbytes 0.49.2, and aligns shared dependencies with the application lock.
 It creates `inference/.venv` and installs the shared application editable from
 `..`; it does not modify the lightweight `.venv`. Dependency installation needs
 prepared downloads or network access; model generation reads local files only.
-The runtime has not yet been installed or GPU-tested on either platform.
+Check CUDA availability in this separate environment before starting the worker.
 
 Local fields are `base_path`, optional `adapter_path`, `device` (`cuda:0` by
 default), `precision` (`4bit`, `float16` or `float32`) and `context_tokens`.
@@ -52,6 +52,9 @@ The base tokenizer supplies the chat template; adapter tokenizers are not
 substituted. Every pretrained load uses a local path and `local_files_only=True`;
 remote model code is disabled. The 4-bit configuration uses NF4 with double
 quantization. Each client caches one model and serializes generation calls.
+Generation prefers Flash, efficient and cuDNN SDPA kernels ahead of the math
+kernel, so Windows builds without Flash Attention can use cuDNN grouped attention.
+The scoped selection restores the previous PyTorch kernel settings afterwards.
 `max_tokens` becomes `max_new_tokens`; input plus that output budget must fit
 `context_tokens`. Overflow raises an error without silently truncating history.
 Generation uses the model's EOS IDs. `timeout_seconds` is Transformers'
@@ -65,6 +68,14 @@ envelopes raise an error; unfinished budget-limited output remains text with a
 non-success finish reason. The caller must check that reason, validate through
 the shared tool contract, and use the normal executor. A request to refund does
 not itself authorize or execute a refund.
+
+The local adapter also accepts a graph control object (`ask_user` or `final`)
+inside a single tool envelope or after a `JSON ` prefix. It returns that object
+as assistant content for the graph to validate, rather than as a business tool.
+Adjacent repeated opening tool tags are removed from the envelope framing;
+the actual argument JSON is preserved. Other malformed envelopes still fail.
+The workbench configuration allows 8192 total tokens with 512 output tokens;
+the shared Agent bounds visible UTF-8 context and tool output separately.
 
 For another turn, append `reply.message.as_message()` and tool messages with
 matching `tool_call_id` values before calling `generate` again. The local
@@ -86,7 +97,8 @@ speed and Windows/Linux adapter compatibility still require real model runs;
 the shared Agent graph and [independent worker](worker.md) can use this client.
 The API and worker share `model_config_file` in application settings, also
 selectable with `TTAL_MODEL_CONFIG_FILE`. HTTP task attempts record that model's
-version and the selected Agent configuration version. The UI is not connected yet.
+version and the selected Agent configuration version. The workbench connects to
+the same local API; see [startup and manual testing](../README.md#启动浏览器工作台).
 
 API references: [Qwen's tokenizer template](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/tokenizer_config.json),
 [Transformers chat templates](https://huggingface.co/docs/transformers/v4.57.3/chat_templating),
@@ -198,7 +210,7 @@ to mock. Truncated replies retain `finish_reason=length` for caller handling.
 An injected `httpx.AsyncClient` remains owned by the caller; otherwise each call
 opens and closes its own client.
 
-The Linux server must expose chat completions with parsed tool calls. For Qwen2.5,
+An optional HTTP model server must expose chat completions with parsed tool calls. For Qwen2.5,
 vLLM documents automatic tool choice and the Hermes parser. Check flags against
 the installed server version; this application does not change the GPU stack.
 See [vLLM tool calling](https://docs.vllm.ai/en/latest/features/tool_calling/).

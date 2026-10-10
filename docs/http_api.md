@@ -29,6 +29,9 @@ API 与独立 worker 使用相同配置和运行目录；默认选用 mock。真
 | POST | `/tasks/{task_id}/input` | `InputRequest`：request_id、input_request_id、message；200 返回保存的输入回执 |
 | POST | `/tasks/{task_id}/cancel` | 无请求体；取消 queued/waiting_input/waiting_approval，200 返回 cancelled 任务 |
 | GET | `/tasks/{task_id}/events` | SSE，after_seq（≥0，默认 0）；按序发送持久化事件，终态排空后关闭 |
+| GET | `/policies/{policy_id}` | 必填 version、可选 section（默认 `/`）；回读精确版本/条款原文，缺引用返回 policy_not_found / 404 |
+
+浏览器工作台的启动与人工测试步骤见 [README](../README.md#启动浏览器工作台)。政策回读允许查看历史版本，不自动替换成当前版本，也不会写业务数据或授予业务权限。
 
 `input_request` 在 waiting_input 状态返回 `{kind, request_id, question}`，其他状态为
 null。`attempt` 包含 thread_id、模型/Agent 配置版本和持久化状态。`result` 从该尝试的

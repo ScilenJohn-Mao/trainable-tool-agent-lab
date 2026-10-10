@@ -1,0 +1,62 @@
+[
+  {
+    "role": "assistant",
+    "content": "{\"kind\":\"ask_user\",\"question\":\"请提供订单号（此固定演示使用 ORD-1001）。\"}"
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "demo-order",
+        "type": "function",
+        "function": {
+          "name": "get_order",
+          "arguments": "{\"order_id\":\"ORD-1001\"}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "demo-search",
+        "type": "function",
+        "function": {
+          "name": "search_policy",
+          "arguments": "{\"query\":\"到货损坏退款条件金额\",\"category\":\"general_goods\",\"limit\":2}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "demo-read",
+        "type": "function",
+        "function": {
+          "name": "read_policy",
+          "arguments": "{\"policy_id\":\"P-REFUND-ELIGIBILITY\",\"version\":\"mock-policy-v1\",\"section\":\"eligibility\"}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "demo-refund",
+        "type": "function",
+        "function": {
+          "name": "request_refund",
+          "arguments": "{\"order_id\":\"ORD-1001\",\"amount_minor\":12900,\"reason\":\"平台已核实到货损坏，全额退款\",\"policy_refs\":[{\"policy_id\":\"R-REFUND-01\",\"version\":\"mock-policy-v1\",\"section\":\"spec.json#/rules/refund\",\"effective_from\":\"2026-09-01T00:00:00+08:00\",\"effective_to\":\"2026-10-01T00:00:00+08:00\"}]}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "content": "{\"kind\":\"final\",\"summary\":\"请依据已提交账本或人工拒绝记录核对处理结果。\"}"
+  }
+]

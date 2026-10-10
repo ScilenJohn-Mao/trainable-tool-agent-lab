@@ -1,6 +1,77 @@
 # Trainable Tool Agent Lab
 
-模拟售后业务工作台的轻量后端，提供订单与政策查询、人工提案/确认、受保护的 MCP 退款/补偿/转人工、SQLite 账本和 HTTP 任务接口。使用模拟订单、固定业务时间及 CNY 整数分。
+模拟售后业务工作台，提供浏览器工单页面、订单与政策查询、人工提案/确认、受保护的 MCP 退款/补偿/转人工、SQLite 账本和 HTTP 任务接口。使用模拟订单、固定业务时间及 CNY 整数分。
+
+## 启动浏览器工作台
+
+准备 Python 3.12、uv 和 Node.js 22.12 或更新版本。首次安装从项目根目录执行；Python 命令只安装轻量应用依赖：
+
+```powershell
+uv sync --locked --python 3.12 --cache-dir .uv-cache
+npm --prefix frontend ci
+uv run --no-sync --cache-dir .uv-cache python scripts/seed_demo.py --database artifacts/runtime/workbench/app.sqlite3
+```
+
+初始化命令要求目标数据库不存在，不会覆盖已有记录。`workbench` 是此次演示的独立运行目录，保留其中的数据库与 checkpoint 可继续查看和处理原工单。
+
+打开三个终端。前两个终端均在项目根目录运行，并设置相同运行目录与模型配置。
+
+终端一启动 API：
+
+```powershell
+$env:TTAL_RUNTIME_DIR="artifacts/runtime/workbench"
+$env:TTAL_MODEL_CONFIG_FILE="configs/models/mock.yaml"
+uv run --no-sync --cache-dir .uv-cache python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
+```
+
+终端二启动 worker：
+
+```powershell
+$env:TTAL_RUNTIME_DIR="artifacts/runtime/workbench"
+$env:TTAL_MODEL_CONFIG_FILE="configs/models/mock.yaml"
+uv run --no-sync --cache-dir .uv-cache python -m apps.worker.main --mock-responses data/scenarios/demo_refund_replies.json
+```
+
+终端三启动页面：
+
+```powershell
+cd frontend
+npm run dev
+```
+
+访问 [工单工作台](http://127.0.0.1:5173)。页面通过同机 API 查询与提交工单，SSE 展示执行进展；Vite 将 `/api` 代理到 `http://127.0.0.1:8000`。更换 API 地址时，在页面终端设置 `TTAL_API_TARGET` 后再启动。下载依赖后，页面不加载外部字体或 CDN 资源。
+
+人工测试步骤：
+
+1. 输入“收到的商品已损坏，请处理售后”，先留空订单号，创建工单。
+2. 在补充信息面板回复 `ORD-1001`。核对方案显示订单、退款 **12900 分 / ¥129.00**、理由和提案版本。
+3. 点击“确认执行”，核对业务回执中的实际退款金额与操作键，展开政策依据查看原文、版本和条款。右侧可展开工具参数和结果。
+4. 刷新浏览器，原工单、等待点和最终结果仍可查看。也可在等待补充信息或确认时取消工单。
+5. 测试拒绝时使用另一份新数据库：停止 API 与 worker，将上述命令中的 `workbench` 换为 `workbench-reject`，先初始化，再启动两者。点击“拒绝方案”，结果应无业务操作与退款。
+
+示例 worker 使用固定的 **脚本 mock**，每条工单都演示 ORD-1001 的同一退款流程，页面明确显示模型标识。它用于测试界面与业务连接，不会根据任意问题智能选择订单。确认后的真实模拟业务记录不会自动重置，同一订单不能再次退款；新一轮演示请另选运行目录。API、worker、页面各用 Ctrl+C 停止。
+
+Linux 的步骤相同，环境变量用 shell 写法，例如 `export TTAL_RUNTIME_DIR=artifacts/runtime/workbench` 和 `export TTAL_MODEL_CONFIG_FILE=configs/models/mock.yaml`；其余命令保持一致。
+
+使用真实本机模型时，先按下文准备模型与独立 `inference/` 环境。API 与 worker 均将 `TTAL_MODEL_CONFIG_FILE` 改为 `configs/models/qwen3b-local.yaml`，使用另一份已初始化的运行目录；API 仍在轻量环境运行，worker 命令改为：
+
+```powershell
+uv run --project inference --no-sync --cache-dir .uv-cache python -m apps.worker.main
+```
+
+此时不传 `--mock-responses`。页面操作保持一致，模型直接在 worker 中读取本机权重；真实模型可能产生不同的澄清问题、方案或失败结果，金额与业务结果仍以受保护的服务和账本为准。
+
+`qwen3b-local.yaml` 为完整工单设置 8192 token 总上下文、最多 512 输出。共享工具契约、订单/政策和确认快照也占上下文；单次简短工具请求可在 4K 内运行，完整流程需要更大预算。输入加输出超限会明确失败，不会静默删除确认事实。实际显存取决于上下文和 GPU。
+
+共享 Agent 另按 `configs/budgets.yaml` 将模型可见上下文控制在 24000 UTF-8 字节、单条工具输出控制在 2048 字节；完整工具结果和引用仍保存在运行状态中。较早的非关键历史可按完整工具调用/结果对移出模型上下文，订单事实、确认和操作记录保留。长输入或反复补充仍可能超限，请优先使用短而明确的工单。
+
+生产构建使用 `npm --prefix frontend run build`；本机查看构建结果可在 `frontend/` 执行 `npm run preview`，API 与 worker 仍须启动。浏览器回归需要先安装前端依赖；Windows 使用已安装的 Edge，Linux 先执行 `npx playwright install chromium`。从项目根目录执行：
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/e2e/test_ticket_flow.py
+```
+
+该测试自动启动隔离 API、worker 和页面，验证批准、拒绝、取消、刷新及窄屏布局，不接现有业务库。`npm --prefix frontend run test:e2e` 则使用已启动的服务，默认地址为 `http://127.0.0.1:5173`。
 
 ## 快速运行
 
@@ -80,7 +151,7 @@ trainable-tool-agent-lab/
 
 应用的直接推理方式采用 Transformers + PEFT，在每台机器的 worker 内加载本机文件；不要求远程模型服务、服务器 IP、Ollama 或 vLLM。以 3B 的 4-bit、单请求、2K–4K 总上下文及最多 512 个输出 token 为初始验证配置，实际显存和工具效果须实测。模型、依赖及前端资源准备齐全后，加载使用本地路径与离线选项；浏览器到同机 API 的 HTTP/SSE 不需要外网。
 
-客户端支持 `local`、`mock` 和兼容 HTTP 三种入口；`local` 直接加载本机基座与可选 PEFT adapter，不调用模型 HTTP。当前可通过 CLI 调用，共享 Agent 图与独立 worker 已可调用该接口，页面尚未接入；启动方法见[worker 说明](docs/worker.md)。真实 3B/GPU 与训练 adapter 的两端效果仍须实测；轻量测试中的模型替身不能代替它们。完整参数与消息历史用法见[模型客户端说明](docs/models.md)。
+客户端支持 `local`、`mock` 和兼容 HTTP 三种入口；`local` 直接加载本机基座与可选 PEFT adapter，不调用模型 HTTP。当前可通过 CLI 调用，共享 Agent 图与独立 worker 已可调用该接口，页面已通过应用 API 接入；启动方法见[worker 说明](docs/worker.md)。真实 3B/GPU 与训练 adapter 的两端效果仍须实测；轻量测试中的模型替身不能代替它们。完整参数与消息历史用法见[模型客户端说明](docs/models.md)。
 
 在项目根目录准备独立推理环境（Windows，使用已有 Python 3.12 解释器）：
 

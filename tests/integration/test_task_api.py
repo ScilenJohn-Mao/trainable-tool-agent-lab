@@ -257,11 +257,27 @@ def test_openapi_exposes_shared_input_contracts(api):
     schema = api["client"].get("/openapi.json").json()
     assert set(schema["paths"]) == {"/tasks", "/tasks/{task_id}", "/tasks/{task_id}/proposal",
                                    "/tasks/{task_id}/approval", "/tasks/{task_id}/input", "/tasks/{task_id}/cancel",
-                                   "/tasks/{task_id}/events"}
+                                   "/tasks/{task_id}/events", "/policies/{policy_id}"}
     for name in ["TaskCreate", "ApprovalRequest", "InputRequest"]:
         assert schema["components"]["schemas"][name]["additionalProperties"] is False
         assert "owner_id" not in schema["components"]["schemas"][name]["properties"]
     assert schema["paths"]["/tasks"]["post"]["responses"]["201"]
+
+
+@pytest.mark.parametrize("version,amount", [("mock-policy-v0", "300"), ("mock-policy-v1", "500"), ("mock-policy-v2", "800")])
+def test_policy_viewer_reads_exact_versions_without_business_writes(api, version, amount):
+    before = api["path"].read_bytes()
+    response = api["client"].get("/policies/P-DELAY-AMOUNT", params={"version": version, "section": "amount"})
+    assert response.status_code == 200
+    document = response.json()
+    assert document["reference"]["version"] == version and document["reference"]["section"] == "amount"
+    assert amount in document["text"]
+    assert api["path"].read_bytes() == before
+
+
+@pytest.mark.parametrize("params", [{"version": "missing"}, {"version": "mock-policy-v1", "section": "missing"}])
+def test_policy_viewer_missing_location_never_falls_back(api, params):
+    assert_error(api["client"].get("/policies/P-DELAY-AMOUNT", params=params), 404, "policy_not_found")
 
 
 def test_lifespan_initializes_empty_database_and_restart_preserves_tasks(tmp_path):

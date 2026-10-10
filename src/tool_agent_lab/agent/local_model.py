@@ -41,14 +41,29 @@ def _argument_text(envelope: str) -> str:
 def parse_qwen_output(text: str, *, truncated: bool = False) -> AssistantMessage:
     """Decode Qwen tool envelopes; shared tool contracts validate arguments later."""
     matches = list(re.finditer(r"<tool_call>(.*?)</tool_call>", text, re.DOTALL))
+    envelopes = [re.sub(r"^(?:<tool_call>\s*)+", "", match.group(1).strip()) for match in matches]
     remaining = re.sub(r"<tool_call>.*?</tool_call>", "", text, flags=re.DOTALL).strip()
     if "<tool_call>" in remaining or "</tool_call>" in remaining:
         if truncated:
             return AssistantMessage(content=text)
         raise ValueError("Incomplete Qwen tool call envelope")
     calls = []
-    for match in matches:
-        envelope = match.group(1).strip()
+    if len(envelopes) == 1:
+        envelope = envelopes[0]
+        value = json.loads(envelope)
+        # Small Qwen models can wrap the graph's control reply in a tool delimiter.
+        if isinstance(value, dict) and "name" not in value and value.get("kind") in ("ask_user", "final"):
+            return AssistantMessage(content=envelope)
+    if not matches and remaining.startswith("JSON "):
+        candidate = remaining[5:].strip()
+        try:
+            value = json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        else:
+            if isinstance(value, dict) and value.get("kind") in ("ask_user", "final"):
+                return AssistantMessage(content=candidate)
+    for envelope in envelopes:
         value = json.loads(envelope)
         calls.append(ModelToolCall(
             id=f"call-{uuid4().hex}",
@@ -128,6 +143,7 @@ class LocalModel:
             if self._model is None:
                 self._load()
             import torch
+            from torch.nn.attention import SDPBackend, sdpa_kernel
 
             inputs = self._tokenizer.apply_chat_template(
                 template_messages(messages), tools=chat_tool_definitions(tools) or None,
@@ -143,7 +159,12 @@ class LocalModel:
             )
             if self.config.temperature > 0:
                 options["temperature"] = self.config.temperature
-            with torch.inference_mode():
+            # cuDNN handles grouped attention on Windows builds without Flash Attention;
+            # prefer it to the quadratic math kernel for longer tool histories.
+            with torch.inference_mode(), sdpa_kernel(
+                [SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION,
+                 SDPBackend.CUDNN_ATTENTION, SDPBackend.MATH], set_priority=True,
+            ):
                 output = self._model.generate(**inputs, **options)
             tokens = output[0][prompt_tokens:].tolist()
             eos = self._model.generation_config.eos_token_id

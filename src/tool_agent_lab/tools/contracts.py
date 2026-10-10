@@ -25,24 +25,24 @@ class ToolName(StrEnum):
 
 
 class GetOrderArgs(ContractModel):
-    order_id: NonEmptyStr
+    order_id: NonEmptyStr = Field(description="Exact order ID supplied by the user, e.g. ORD-1001. Ask the user if it is missing.")
 
 
 class SearchPolicyArgs(ContractModel):
-    query: NonEmptyStr
-    category: NonEmptyStr | None = None
-    version: NonEmptyStr | None = None
+    query: NonEmptyStr = Field(description="Search Chinese policy text, e.g. 到货损坏退款 or 延迟补偿. A category name alone is not a policy question.")
+    category: NonEmptyStr | None = Field(default=None, description="Product category from get_order: general_goods or digital_goods. Do not put a rule ID or section here.")
+    version: NonEmptyStr | None = Field(default=None, description="Exact document version, e.g. mock-policy-v1. Usually omit to search currently active policies.")
     limit: Annotated[int, Field(strict=True, ge=1, le=10)] = 5
 
 
 class ReadPolicyArgs(ContractModel):
-    policy_id: NonEmptyStr
-    version: NonEmptyStr
-    section: NonEmptyStr | None = None
+    policy_id: NonEmptyStr = Field(description="Copy policy_id from an actual search hit.")
+    version: NonEmptyStr = Field(description="Copy the exact version from that search hit.")
+    section: NonEmptyStr | None = Field(default=None, description="Copy section from that same hit; omit to read the whole document.")
 
 
 class GetOperationArgs(ContractModel):
-    operation_key: NonEmptyStr
+    operation_key: NonEmptyStr = Field(description="An actual operation key previously returned by a tool. Never invent a key.")
 
 
 # The action discriminator defaults to the selected tool's name.

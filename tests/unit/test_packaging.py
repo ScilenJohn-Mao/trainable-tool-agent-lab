@@ -62,6 +62,10 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "inference/pyproject.toml": '# Inference packaging fixture.\n',
         "inference/uv.lock": '# Lock presence fixture.\n',
     }
+    rules = tomllib.loads((source_tree / "deploy/package_rules.toml").read_text(encoding="utf-8"))
+    frontend_files = next(item["files"] for item in rules["required_when_present"] if item["directory"] == "frontend")
+    for name in frontend_files:
+        retained.setdefault(name, (packaging.PROJECT_ROOT / name).read_text(encoding="utf-8"))
     excluded = {
         "src/.venv/hidden.py": "ignore",
         "src/nested/custom-python/pyvenv.cfg": "home = unused",
@@ -71,6 +75,8 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "src/tool_agent_lab/.pytest_cache/result": "ignore",
         "frontend/node_modules/example/index.js": "ignore",
         "frontend/dist/index.html": "ignore",
+        "frontend/playwright-report/index.html": "ignore",
+        "frontend/test-results/screenshot.png": "ignore",
         "frontend/.env.example": "nested examples are not explicitly allowed",
         ".env": "not-real-secrets",
         "configs/.env.production": "not-real-secrets",
@@ -108,6 +114,16 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
     assert bundle.excluded["src/nested/custom-python"] == "virtual_environment"
     assert bundle.files["configs/models/base.yaml"] == b"model: example\n"
     assert not (source_tree / ".git").exists()
+
+
+def test_workbench_source_inventory_contains_locks_prompts_and_retrieval_without_assets():
+    bundle = packaging.collect_sources(packaging.PROJECT_ROOT, packaging.PROJECT_ROOT / "artifacts/packages")
+    assert {"frontend/package-lock.json", "frontend/src/pages/Workbench.tsx",
+            "configs/prompts/after_sales.txt", "data/retrieval/queries.jsonl",
+            "data/scenarios/demo_refund_replies.json", "inference/uv.lock"} <= bundle.files.keys()
+    assert not any(part in {"models", "node_modules", "dist", "test-results", "playwright-report"}
+                   for name in bundle.files for part in Path(name).parts if name.startswith("frontend/"))
+    assert not any(name.startswith(("models/", "artifacts/", "inference/.venv/")) for name in bundle.files)
 
 
 def test_archive_manifest_hashes_and_extracted_cli(

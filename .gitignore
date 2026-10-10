@@ -12,6 +12,8 @@ __pycache__/
 .vscode/
 node_modules/
 dist/
+playwright-report/
+test-results/
 build/
 artifacts/
 /models/

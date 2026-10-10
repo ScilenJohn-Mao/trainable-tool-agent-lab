@@ -2,4 +2,4 @@ max_decisions: 12
 max_tokens: 512
 max_tool_calls_per_turn: 7
 max_context_bytes: 24000
-max_tool_output_bytes: 4096
+max_tool_output_bytes: 2048

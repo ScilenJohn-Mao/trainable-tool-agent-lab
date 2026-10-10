@@ -53,6 +53,9 @@ required_files = [
   "data/business/v1/operations.json", "data/business/v1/scenarios.json",
   "data/business/v1/policies.json", "data/business/v1/policy_specs.json",
   "data/cases/boundary.jsonl", "data/cases/README.md",
+  "data/retrieval/queries.jsonl", "data/retrieval/README.md",
+  "data/scenarios/demo_refund_replies.json", "apps/api/routes/policies.py",
+  "apps/api/routes/events.py", "src/tool_agent_lab/knowledge/citations.py",
   "deploy/package_rules.toml", "deploy/README.md",
 ]
 
@@ -61,7 +64,7 @@ exclude_directories = [
   "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
   ".git", ".idea", ".vscode", ".agents", ".codex", ".claude", "node_modules", "artifacts",
   "dist", "build", ".next", "coverage", "logs", "checkpoints", "weights",
-  "model-cache", "huggingface",
+  "model-cache", "huggingface", "playwright-report", "test-results",
 ]
 
 exclude_files = [
@@ -78,7 +81,14 @@ exclude_files = [
 # Optional components require their manifests and real lockfiles when present.
 [[required_when_present]]
 directory = "frontend"
-files = ["frontend/package.json", "frontend/package-lock.json"]
+files = [
+  "frontend/package.json", "frontend/package-lock.json", "frontend/index.html",
+  "frontend/tsconfig.json", "frontend/vite.config.ts", "frontend/src/main.tsx",
+  "frontend/src/App.tsx", "frontend/src/styles.css", "frontend/src/format.ts",
+  "frontend/src/api/client.ts", "frontend/src/api/types.ts",
+  "frontend/src/pages/Workbench.tsx", "frontend/src/components/ApprovalPanel.tsx",
+  "frontend/src/components/EventTimeline.tsx", "frontend/src/components/ResultPanel.tsx",
+]
 
 [[required_when_present]]
 directory = "training/art"

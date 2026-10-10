@@ -73,6 +73,23 @@ def test_qwen_text_and_multiple_calls_keep_raw_arguments_and_ids():
     assert converted[1] == history[1] and history == original
 
 
+@pytest.mark.parametrize("kind,field", [("ask_user", "question"), ("final", "summary")])
+@pytest.mark.parametrize("wrapper", ["JSON {}", "Explanation. <tool_call>{}</tool_call>"])
+def test_qwen_control_reply_framing_remains_content_for_graph_validation(kind, field, wrapper):
+    control = {"kind": kind, field: "Please provide the order ID."}
+    message = local.parse_qwen_output(wrapper.format(json.dumps(control)))
+    assert not message.tool_calls
+    assert json.loads(message.content) == control
+
+
+def test_qwen_repeated_opening_tag_preserves_actual_tool_arguments():
+    raw = '{"query":"refund","category":"general_goods","limit":2}'
+    reply = local.parse_qwen_output('<tool_call>\n<tool_call>\n{"name":"search_policy","arguments":' + raw + '}</tool_call>')
+    assert len(reply.tool_calls) == 1
+    assert reply.tool_calls[0].function.name == "search_policy"
+    assert reply.tool_calls[0].function.arguments == raw
+
+
 @pytest.mark.parametrize("text", [
     '<tool_call>{"name":"get_order"}</tool_call>',
     '<tool_call>not json</tool_call>',
@@ -154,6 +171,11 @@ def model_stack(tmp_path, monkeypatch):
         cuda=SimpleNamespace(is_available=lambda: True),
     )
     monkeypatch.setitem(sys.modules, "torch", torch)
+    monkeypatch.setitem(sys.modules, "torch.nn.attention", SimpleNamespace(
+        SDPBackend=SimpleNamespace(FLASH_ATTENTION="flash", EFFICIENT_ATTENTION="efficient",
+                                   CUDNN_ATTENTION="cudnn", MATH="math"),
+        sdpa_kernel=lambda *args, **kwargs: nullcontext(),
+    ))
     monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(
         AutoTokenizer=SimpleNamespace(from_pretrained=tokenizer_load),
         AutoModelForCausalLM=SimpleNamespace(from_pretrained=model_load),
