@@ -17,8 +17,8 @@ from tool_agent_lab.settings import PROJECT_ROOT, load_settings
 
 async def run(args: argparse.Namespace) -> None:
     settings = load_settings(args.app_config)
-    model = ModelClient(load_model_config(args.model_config))
-    config = load_agent_config(args.agent_config)
+    model = ModelClient(load_model_config(args.model_config or settings.model_config_file))
+    config = load_agent_config(args.agent_config or settings.agent_config_file)
     replies = ()
     if model.config.provider == "mock":
         if args.mock_responses is None:
@@ -39,8 +39,8 @@ async def run(args: argparse.Namespace) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-config", type=Path, help="Application YAML; default configs/app.yaml")
-    parser.add_argument("--model-config", type=Path, default=Path("configs/models/mock.yaml"))
-    parser.add_argument("--agent-config", type=Path, default=Path("configs/agents/default.yaml"))
+    parser.add_argument("--model-config", type=Path, help="Override application's model_config_file")
+    parser.add_argument("--agent-config", type=Path, help="Override application's agent_config_file")
     parser.add_argument("--mock-responses", type=Path, help="Explicit assistant-message JSON array, replayed per task")
     parser.add_argument("--once", action="store_true", help="Process one ready task or report idle and exit")
     parser.add_argument("--poll-interval", type=float, default=0.5)

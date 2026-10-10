@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from tool_agent_lab.agent.inputs import InputService
 from tool_agent_lab.runtime.approvals import ApprovalService
 from tool_agent_lab.runtime.task_service import TaskService
 
@@ -21,6 +22,11 @@ def get_approval_service(request: Request) -> ApprovalService:
     return request.app.state.approvals
 
 
+def get_input_service(request: Request) -> InputService:
+    return request.app.state.inputs
+
+
 Owner = Annotated[str, Depends(get_owner_id)]
 Tasks = Annotated[TaskService, Depends(get_task_service)]
 Approvals = Annotated[ApprovalService, Depends(get_approval_service)]
+Inputs = Annotated[InputService, Depends(get_input_service)]

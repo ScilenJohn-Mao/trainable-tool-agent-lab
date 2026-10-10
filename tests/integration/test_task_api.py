@@ -2,6 +2,9 @@
 
 import asyncio
 import json
+import os
+import subprocess
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -9,6 +12,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.main import create_app
+from tests.integration.test_agent_graph import tool_message
+from tool_agent_lab.agent.model_client import AssistantMessage
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.approvals import ApprovalService
 from tool_agent_lab.schemas.business import Order
@@ -67,12 +72,15 @@ def test_create_get_list_and_current_proposal_use_persisted_shared_contracts(api
     assert task["created_at"] == api["rules"].business_time.isoformat()
     assert task["current_attempt_id"]
     client = api["client"]
-    assert client.get(f"/tasks/{task['task_id']}").json() == task
+    detail = client.get(f"/tasks/{task['task_id']}").json()
+    assert {key: detail[key] for key in task} == task
+    assert detail["input_request"] is None and detail["result"] is None
     assert client.get("/tasks").json() == [task]
     assert client.get(f"/tasks/{task['task_id']}/proposal").json() is None
     with connect(api["path"]) as connection:
         attempt = TaskRepository(connection).get_attempt(task["task_id"], task["current_attempt_id"], "demo-user")
-        assert (attempt.status, attempt.model_version, attempt.config_version) == ("queued", "manual", "app-v1")
+        assert (attempt.status, attempt.model_version, attempt.config_version) == ("queued", "mock-v1", "app-v1")
+        assert detail["attempt"] == attempt.model_dump(mode="json")
         assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 1
     executor, values, proposal = propose(api, task["task_id"])
     assert client.get(f"/tasks/{task['task_id']}").json()["status"] == "waiting_approval"
@@ -247,8 +255,9 @@ def test_http_storage_failure_rolls_back_decision_status_and_events(api):
 
 def test_openapi_exposes_shared_input_contracts(api):
     schema = api["client"].get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/tasks", "/tasks/{task_id}", "/tasks/{task_id}/proposal", "/tasks/{task_id}/approval"}
-    for name in ["TaskCreate", "ApprovalRequest"]:
+    assert set(schema["paths"]) == {"/tasks", "/tasks/{task_id}", "/tasks/{task_id}/proposal",
+                                   "/tasks/{task_id}/approval", "/tasks/{task_id}/input", "/tasks/{task_id}/cancel"}
+    for name in ["TaskCreate", "ApprovalRequest", "InputRequest"]:
         assert schema["components"]["schemas"][name]["additionalProperties"] is False
         assert "owner_id" not in schema["components"]["schemas"][name]["properties"]
     assert schema["paths"]["/tasks"]["post"]["responses"]["201"]
@@ -262,7 +271,157 @@ def test_lifespan_initializes_empty_database_and_restart_preserves_tasks(tmp_pat
     with TestClient(application) as client:
         task = client.post("/tasks", json={"user_message": "need order information"}).json()
     with TestClient(create_app(settings)) as client:
-        assert client.get(f"/tasks/{task['task_id']}").json() == task
+        detail = client.get(f"/tasks/{task['task_id']}").json()
+        assert {key: detail[key] for key in task} == task
         with connect(settings.app_db_path) as connection:
             assert connection.execute("SELECT count(*) FROM orders").fetchone()[0] == 0
             assert connection.execute("SELECT count(*) FROM tasks").fetchone()[0] == 1
+
+
+def worker_tick(api, tmp_path):
+    """Use the same application config for HTTP creation and the separate worker."""
+    replies = [AssistantMessage(content='{"kind":"ask_user","question":"Which order?"}'),
+               tool_message("get_order", {"order_id": "ORD-1001"}, "read-order"),
+               tool_message("request_refund", {"order_id": "ORD-1001", "amount_minor": 12900,
+                   "reason": "Verified damage", "policy_refs": [api["rules"].reference("request_refund").model_dump(mode="json")]}, "refund"),
+               AssistantMessage(content="Use the receipt.")]
+    config = tmp_path / "application.yaml"
+    config.write_text(api["settings"].model_dump_json(), encoding="utf-8")
+    script = tmp_path / "replies.json"
+    script.write_text(json.dumps([r.as_message() for r in replies]), encoding="utf-8")
+    command = [sys.executable, "-m", "apps.worker.main", "--app-config", str(config),
+               "--mock-responses", str(script), "--once"]
+    env = {k: v for k, v in os.environ.items() if not k.startswith("TTAL_")}
+
+    def tick():
+        run = subprocess.run(command, cwd=PROJECT_ROOT, env=env, capture_output=True, text=True,
+                             encoding="utf-8", timeout=30)
+        assert run.returncode == 0, run.stderr
+        return json.loads(run.stdout)
+    return tick
+
+
+@pytest.mark.parametrize("decision", ["approved", "rejected"])
+def test_http_input_and_approval_drive_independent_worker_to_owned_result(api, tmp_path, decision):
+    client = api["client"]
+    tick = worker_tick(api, tmp_path)
+    task = create(api, order_id=None)
+    path = f"/tasks/{task['task_id']}"
+    first = tick()
+    detail = client.get(path).json()
+    assert detail["status"] == "waiting_input" and detail["input_request"] == first["waiting"]
+    thread_id = detail["attempt"]["thread_id"]
+    request = {"request_id": "input-reply", "input_request_id": detail["input_request"]["request_id"], "message": "ORD-1001"}
+    assert_error(client.post(path + "/input", json=request | {"input_request_id": "stale"}), 409, "input_request_not_current")
+    assert client.post(path + "/input", json=request | {"owner_id": "other"}).status_code == 422
+    assert client.post(path + "/input", json=request).json() == request
+    before = api["path"].read_bytes()
+    assert client.post(path + "/input", json=request).json() == request
+    assert api["path"].read_bytes() == before
+    assert_error(client.post(path + "/input", json=request | {"message": "changed"}), 409, "input_request_conflict")
+    assert_error(client.post(path + "/cancel"), 409, "task_not_cancellable")
+    second = tick()
+    assert second["status"] == "waiting_approval" and second["thread_id"] == thread_id
+    proposal = client.get(path + "/proposal").json()
+    approval = {"request_id": "http-decision", "proposal_id": proposal["proposal_id"],
+                "proposal_version": proposal["proposal_version"], "decision": decision}
+    assert_error(client.post(path + "/approval", json=approval | {"proposal_version": proposal["proposal_version"] + 1}),
+                 409, "proposal_not_current")
+    receipt = client.post(path + "/approval", json=approval)
+    assert receipt.status_code == 200, receipt.text
+    third = tick()
+    detail = client.get(path).json()
+    assert detail["status"] == detail["attempt"]["status"] == "completed"
+    assert detail["result"] == third["result"] and third["thread_id"] == thread_id
+    assert detail["result"]["outcome"] == ("resolved" if decision == "approved" else "rejected")
+    assert detail["input_request"] is None
+    assert client.post(path + "/input", json=request).json() == request
+    assert client.post(path + "/approval", json=approval).json() == receipt.json()
+    assert tick() == {"status": "idle"}
+    assert_error(client.post(path + "/cancel"), 409, "task_not_cancellable")
+    with connect(api["path"]) as connection:
+        assert BusinessRepository(connection).get_order("ORD-1001", "demo-user").refunded_amount_minor == (12900 if decision == "approved" else 0)
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == (1 if decision == "approved" else 0)
+
+
+@pytest.mark.parametrize("waiting", ["queued", "waiting_input", "waiting_approval"])
+def test_http_cancel_waiting_tasks_is_idempotent_and_worker_does_not_resume(api, tmp_path, waiting):
+    client = api["client"]
+    tick = worker_tick(api, tmp_path)
+    task = create(api, order_id=None)
+    path = f"/tasks/{task['task_id']}"
+    input_request = {"request_id": "late-input", "input_request_id": "unused", "message": "ORD-1001"}
+    if waiting != "queued":
+        first = tick()
+        input_request["input_request_id"] = first["waiting"]["request_id"]
+        if waiting == "waiting_approval":
+            assert client.post(path + "/input", json=input_request).status_code == 200
+            assert tick()["status"] == waiting
+    response = client.post(path + "/cancel")
+    assert response.status_code == 200 and response.json()["status"] == "cancelled"
+    before = api["path"].read_bytes()
+    assert client.post(path + "/cancel").json() == response.json()
+    assert api["path"].read_bytes() == before
+    detail = client.get(path).json()
+    assert detail["status"] == detail["attempt"]["status"] == "cancelled"
+    if waiting == "waiting_approval":
+        proposal = client.get(path + "/proposal").json()
+        late = {"request_id": "late-decision", "proposal_id": proposal["proposal_id"],
+                "proposal_version": proposal["proposal_version"], "decision": "approved"}
+        assert_error(client.post(path + "/approval", json=late), 409, "task_not_waiting_approval")
+    else:
+        assert_error(client.post(path + "/input", json=input_request), 409, "task_not_waiting_input")
+    assert tick() == {"status": "idle"}
+    with connect(api["path"]) as connection:
+        assert BusinessRepository(connection).get_order("ORD-1001", "demo-user").refunded_amount_minor == 0
+        assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
+
+
+def test_input_cancel_and_detail_hide_foreign_tasks(api):
+    task = create(api)
+    with TestClient(create_app(api["settings"].model_copy(update={"dev_owner_id": "other-user"}))) as other:
+        before = api["path"].read_bytes()
+        for task_id in (task["task_id"], "missing"):
+            assert_error(other.get(f"/tasks/{task_id}"), 404, "task_not_found")
+            assert_error(other.post(f"/tasks/{task_id}/input", json={"request_id": "x", "input_request_id": "x", "message": "x"}), 404, "task_not_found")
+            assert_error(other.post(f"/tasks/{task_id}/cancel"), 404, "task_not_found")
+        assert api["path"].read_bytes() == before
+
+
+def test_cancel_storage_failure_rolls_back_task_attempt_and_event(api):
+    task = create(api)
+    with transaction(api["path"]) as connection:
+        connection.execute("""CREATE TRIGGER fail_cancel BEFORE INSERT ON events
+            WHEN json_extract(NEW.payload_json, '$.status') = 'cancelled'
+            BEGIN SELECT RAISE(ABORT, 'event storage unavailable'); END""")
+    with TestClient(create_app(api["settings"]), raise_server_exceptions=False) as client:
+        before = api["path"].read_bytes()
+        assert client.post(f"/tasks/{task['task_id']}/cancel").status_code == 500
+        assert api["path"].read_bytes() == before
+        detail = client.get(f"/tasks/{task['task_id']}").json()
+        assert detail["status"] == detail["attempt"]["status"] == "queued"
+
+
+def test_custom_model_and_agent_files_bind_http_and_worker_versions(api, tmp_path):
+    model_file = tmp_path / "model.yaml"
+    model_file.write_text(json.dumps({"provider": "mock", "name": "configured", "version": "configured-v2"}), encoding="utf-8")
+    agent_file = tmp_path / "agent.yaml"
+    agent_file.write_text(json.dumps({"version": "agent-v2", "budgets_path": "configs/budgets.yaml",
+                                      "prompt_path": "configs/prompts/after_sales.txt"}), encoding="utf-8")
+    settings = api["settings"].model_copy(update={"model_config_file": model_file, "agent_config_file": agent_file})
+    with TestClient(create_app(settings)) as client:
+        configured = api | {"client": client, "settings": settings}
+        task = create(configured, order_id=None)
+        outcome = worker_tick(configured, tmp_path)()
+        detail = client.get(f"/tasks/{task['task_id']}").json()
+        assert outcome["status"] == "waiting_input"
+        assert (detail["attempt"]["model_version"], detail["attempt"]["config_version"]) == ("configured-v2", "agent-v2")
+
+
+def test_api_local_model_configuration_does_not_load_gpu_libraries(api):
+    settings = api["settings"].model_copy(update={"model_config_file": PROJECT_ROOT / "configs/models/qwen3b-local.yaml"})
+    from tool_agent_lab.agent.model_client import load_model_config
+    with TestClient(create_app(settings)) as client:
+        task = client.post("/tasks", json={"user_message": "local model task"}).json()
+        assert client.get(f"/tasks/{task['task_id']}").json()["attempt"]["model_version"] == load_model_config(settings.model_config_file).version
+    assert "torch" not in sys.modules

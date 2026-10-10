@@ -6,6 +6,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from apps.api.routes.tasks import router
+from tool_agent_lab.agent.config import load_agent_config
+from tool_agent_lab.agent.inputs import InputService
+from tool_agent_lab.agent.model_client import load_model_config
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.approvals import ApprovalService
 from tool_agent_lab.runtime.task_service import TaskError, TaskService
@@ -22,9 +25,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         initialize_database(settings.app_db_path)
         application.state.tasks = TaskService(
             settings.app_db_path, business_time=rules.business_time,
-            model_version=settings.mode, config_version=settings.config_version,
+            model_version=load_model_config(settings.model_config_file).version,
+            config_version=load_agent_config(settings.agent_config_file).version,
         )
         application.state.approvals = ApprovalService(settings.app_db_path, business_time=rules.business_time)
+        application.state.inputs = InputService(settings.app_db_path, business_time=rules.business_time)
         yield
 
     application = FastAPI(title="Trainable Tool Agent Lab", version="0.1.0", lifespan=lifespan)

@@ -5,3 +5,5 @@ dev_owner_id: demo-user
 # Relative paths are anchored to the project root, regardless of the working directory.
 runtime_dir: artifacts/runtime
 business_data_dir: data/business/v1
+model_config_file: configs/models/mock.yaml
+agent_config_file: configs/agents/default.yaml

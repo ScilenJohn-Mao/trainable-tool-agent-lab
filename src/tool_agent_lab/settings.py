@@ -23,6 +23,8 @@ class Settings(BaseModel):
     dev_owner_id: str = Field(min_length=1)
     runtime_dir: Path
     business_data_dir: Path
+    model_config_file: Path = Path("configs/models/mock.yaml")
+    agent_config_file: Path = Path("configs/agents/default.yaml")
 
     @property
     def app_db_path(self) -> Path:
@@ -80,6 +82,8 @@ def load_settings(
     return settings.model_copy(update={
         "runtime_dir": _project_path(settings.runtime_dir),
         "business_data_dir": _project_path(settings.business_data_dir),
+        "model_config_file": _project_path(settings.model_config_file),
+        "agent_config_file": _project_path(settings.agent_config_file),
     })
 
 

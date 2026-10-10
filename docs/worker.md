@@ -19,8 +19,11 @@ endpoint. Missing files/dependencies raise an error; there is no mock fallback.
 `--once` handles one ready task through its next waiting point or final result;
 it prints a JSON result and exits. With no ready task it prints `{"status":"idle"}`.
 Omit `--once` to poll continuously; Ctrl+C stops the process. `--poll-interval`
-defaults to 0.5 seconds. `--app-config`, `--model-config` and `--agent-config`
-paths are anchored to the source project root, including paths to mock replies.
+defaults to 0.5 seconds. The API and worker share `model_config_file` and
+`agent_config_file` from application settings. `--model-config` and
+`--agent-config` override these for the worker only; configure the API with the
+same files when using an override. Paths are anchored to the source project root,
+including paths to mock replies.
 
 An explicit mock script is a JSON array of assistant messages, for example:
 
@@ -49,8 +52,8 @@ from tool_agent_lab.settings import load_settings
 settings = load_settings()
 rules = BusinessRules.from_file(settings.business_data_dir / "spec.json")
 tasks = TaskService(settings.app_db_path, business_time=rules.business_time,
-                    model_version=load_model_config().version,
-                    config_version=load_agent_config().version)
+                    model_version=load_model_config(settings.model_config_file).version,
+                    config_version=load_agent_config(settings.agent_config_file).version)
 task = tasks.create(TaskCreate(user_message="My item is damaged"),
                     owner_id=settings.dev_owner_id)
 ```
@@ -76,10 +79,11 @@ through Agent.resume, and continues the original persisted thread. No boolean,
 text from the model, or proposed action grants permission to write. Exact
 receipt retries after completion do not make the task runnable again.
 
-Current HTTP task creation uses the configured manual/mock mode as its model
-version. It is not automatically relabeled to the worker model version. Use
-TaskService with the explicit versions above until HTTP creation/input routing
-is connected to the model configuration. The worker does not rewrite older tasks.
+HTTP task creation uses the selected model and Agent configuration versions.
+Use the same application configuration/runtime directory for the API and worker.
+HTTP `/input` and `/approval` only record human receipts; this independent
+worker resumes the original thread. `/cancel` stops queued or human-waiting
+tasks; running tasks return a conflict. The worker does not rewrite older tasks.
 
 Execution exceptions mark the task/attempt failed and then propagate to the
 operator; they are not retried. Normal completed results remain in checkpoints,

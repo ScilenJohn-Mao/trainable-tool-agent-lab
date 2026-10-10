@@ -21,7 +21,7 @@ uv run --no-sync --cache-dir .uv-cache python scripts/demo_business.py --decisio
 
 拒绝输出 `status=rejected`、`operation=null`，订单金额不变。提案和提示在 stderr，结果 JSON 在 stdout；这是固定订单的手工工具流程。完整命令和错误语义见[退款演示](docs/business_demo.md)。
 
-需要 HTTP 时按下文[HTTP 任务与确认服务](#http-任务与确认服务)启动；源码上传、服务器启动和版本切换见[部署说明](deploy/README.md)。HTTP 提供任务/确认记录，独立 worker 已可执行共享 Agent 图，HTTP 创建和输入仍需对接模型版本配置；用法见[worker 说明](docs/worker.md)。
+需要 HTTP 时按下文[HTTP 任务与确认服务](#http-任务与确认服务)启动；源码上传、服务器启动和版本切换见[部署说明](deploy/README.md)。HTTP 创建、补充输入和人工确认已对接独立 worker，API 与 worker 需使用相同运行目录及模型/Agent 配置；用法见[worker 说明](docs/worker.md)。
 
 版本化政策位于 `data/business/v1/policies.json`，共 24 份，涵盖当前规则、品类差异及旧版/未来版对照；来源规格与引用方式见[业务数据说明](data/business/v1/README.md#政策文档与引用)。政策一致性检查：
 
@@ -31,7 +31,7 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/unit/test_polic
 
 ## 本地轻量环境
 
-当前模型客户端支持轻量 mock 和 HTTP 模型端点；本地权重直接加载尚不可用：
+轻量环境用于 mock 和兼容 HTTP 模型端点；本地权重直接加载使用下文的独立推理环境：
 
 ```powershell
 uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.agent.model_client --message "Hello"
@@ -111,6 +111,8 @@ uv run --no-sync --cache-dir .uv-cache python -m tool_agent_lab.settings --init-
 | 开发身份 | `TTAL_DEV_OWNER_ID` | `demo-user` |
 | 运行目录 | `TTAL_RUNTIME_DIR` | `artifacts/runtime` |
 | 模拟业务资源目录 | `TTAL_BUSINESS_DATA_DIR` | `data/business/v1` |
+| 模型配置文件 | `TTAL_MODEL_CONFIG_FILE` | `configs/models/mock.yaml` |
+| Agent 配置文件 | `TTAL_AGENT_CONFIG_FILE` | `configs/agents/default.yaml` |
 
 相对路径统一以源码项目根目录为基准，与当前工作目录、配置文件所在目录无关。`--config` 和 `--env-file` 可选择其他文件，也遵循这一规则；绝对路径保持自身位置。指定文件不存在时直接报错。
 
@@ -210,7 +212,7 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 
 ## HTTP 任务与确认服务
 
-通过本地 HTTP 创建工单、查询任务/列表和完整当前提案，并记录操作者批准或拒绝。
+通过本地 HTTP 创建工单、查询任务/列表和完整当前提案，提交补充输入、批准/拒绝，并取消排队或等待人工交互的任务。详情包含当前尝试身份、待回答问题和已保存的执行结果。
 身份由服务端配置绑定，确认复用同一 ApprovalService，不直接执行业务。
 启动、请求字段、错误码和使用示例见[HTTP 接口说明](docs/http_api.md)。
 
@@ -243,7 +245,7 @@ Invoke-RestMethod -Uri "$base/tasks?status=queued&limit=10"
 Invoke-RestMethod -Uri "$base/tasks/$($task.task_id)/proposal"
 ```
 
-创建返回 queued，查询返回同一任务；没有运行时发布提案时 proposal 为 null。浏览器打开 `http://127.0.0.1:8000/docs`，OpenAPI 在 `/openapi.json`。HTTP 批准仅记录决定，退款演示由上面的手工执行器入口完成；实际确认字段和重试语义见[接口说明](docs/http_api.md)。
+创建返回 queued；独立 worker 使用相同配置领取任务，处理到等待点或终态。没有运行时发布提案时 proposal 为 null。浏览器打开 `http://127.0.0.1:8000/docs`，OpenAPI 在 `/openapi.json`。HTTP 输入/批准仅记录回执，业务执行由 worker 的共享图与受保护执行器完成；字段、取消边界与重试语义见[接口说明](docs/http_api.md)。
 
 ## 受保护业务写入
 

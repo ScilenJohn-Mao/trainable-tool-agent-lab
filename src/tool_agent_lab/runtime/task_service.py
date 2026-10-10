@@ -97,6 +97,20 @@ class TaskService:
             change_status(tasks, EventRepository(connection), attempt, TaskStatus.RUNNING, self.business_time)
             return tasks.get_attempt(task_id, attempt.attempt_id, owner_id)
 
+    def cancel(self, task_id: str, *, owner_id: str) -> Task:
+        """Cancel a queued or human-waiting task without undoing committed business operations."""
+        with transaction(self.database) as connection:
+            tasks = TaskRepository(connection)
+            task, attempt = load_current_attempt(tasks, task_id, owner_id)
+            if task.status == attempt.status == TaskStatus.CANCELLED:
+                return task
+            if task.status != attempt.status or task.status not in (
+                TaskStatus.QUEUED, TaskStatus.WAITING_INPUT, TaskStatus.WAITING_APPROVAL,
+            ):
+                raise TaskError("task_not_cancellable")
+            change_status(tasks, EventRepository(connection), attempt, TaskStatus.CANCELLED, self.business_time)
+            return tasks.get_task(task_id, owner_id)
+
     def propose(
         self, action: ActionParameters, identity: AttemptIdentity, *, expires_at: datetime | None = None,
     ) -> ActionProposal:

@@ -30,6 +30,8 @@ def test_default_paths_are_separate_and_loading_has_no_writes(config_root: Path)
     assert settings.config_version == "app-v1"
     assert settings.runtime_dir == config_root / "artifacts/runtime"
     assert settings.business_data_dir == config_root / "data/business/v1"
+    assert settings.model_config_file == config_root / "configs/models/mock.yaml"
+    assert settings.agent_config_file == config_root / "configs/agents/default.yaml"
     assert settings.app_db_path == settings.runtime_dir / "app.sqlite3"
     assert settings.checkpoint_db_path == settings.runtime_dir / "checkpoints.sqlite3"
     assert settings.app_db_path != settings.checkpoint_db_path
@@ -45,11 +47,15 @@ def test_process_environment_overrides_dotenv_without_mutating_environment(
         encoding="utf-8",
     )
     monkeypatch.setenv("TTAL_RUNTIME_DIR", "artifacts/process")
+    monkeypatch.setenv("TTAL_MODEL_CONFIG_FILE", "configs/models/qwen3b-local.yaml")
+    monkeypatch.setenv("TTAL_AGENT_CONFIG_FILE", "configs/agents/alternate.yaml")
     environment_before = dict(os.environ)
     settings = configuration.load_settings()
     assert settings.mode == "mock"
     assert settings.dev_owner_id == "dotenv-user"
     assert settings.runtime_dir == config_root / "artifacts/process"
+    assert settings.model_config_file == config_root / "configs/models/qwen3b-local.yaml"
+    assert settings.agent_config_file == config_root / "configs/agents/alternate.yaml"
     assert dict(os.environ) == environment_before
 
 
