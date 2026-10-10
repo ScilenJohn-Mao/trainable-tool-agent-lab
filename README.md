@@ -65,6 +65,25 @@ uv run --project inference --no-sync --cache-dir .uv-cache python -m apps.worker
 
 共享 Agent 另按 `configs/budgets.yaml` 将模型可见上下文控制在 24000 UTF-8 字节、单条工具输出控制在 2048 字节；完整工具结果和引用仍保存在运行状态中。较早的非关键历史可按完整工具调用/结果对移出模型上下文，订单事实、确认和操作记录保留。长输入或反复补充仍可能超限，请优先使用短而明确的工单。
 
+只验证本机模型与工具连接时，可先运行一个无需 API 或页面的只读 CLI：
+
+```powershell
+uv run --project inference --no-sync --cache-dir .uv-cache python scripts/demo_local_tools.py --runtime-dir artifacts/runtime/local-tool-demo
+```
+
+命令需要下文的本地模型与独立推理环境。默认使用 4K 总上下文、最多 128 输出 token，
+让模型查询 ORD-1001，经真实 MCP stdio 返回订单，再由同一模型回答；最多三次模型请求。
+全部七个工具契约对模型可见，演示只执行只读工具，选择写工具时停止。
+不连接远程模型服务、不批准或执行新退款，独立演示库前后 SHA-256 应一致。
+再次运行时须用新的 `--runtime-dir`，既有库不会覆盖。
+`--context-tokens` 和 `--max-tokens` 可指定预算，完整工单仍使用上面的工作台配置。
+
+运行目录中的 `receipt.json` 保存真实回复、工具参数/结果与消息配对、token 数、
+每请求耗时和 CUDA 峰值 allocated/reserved 显存。首请求耗时包含模型加载，
+输出 token/秒按整个请求耗时计算；整卡占用仅记录请求后采样值，不冒充进程峰值。
+同时记录依赖版本与模型配置/tokenizer/权重索引 SHA-256；无法确认远程 revision 时保留 null。
+退出码 0 表示完成工具结果往返且演示库未变，回答事实与文字完整性仍须查看实际回执。
+
 生产构建使用 `npm --prefix frontend run build`；本机查看构建结果可在 `frontend/` 执行 `npm run preview`，API 与 worker 仍须启动。浏览器回归需要先安装前端依赖；Windows 使用已安装的 Edge，Linux 先执行 `npx playwright install chromium`。从项目根目录执行：
 
 ```powershell
