@@ -81,6 +81,9 @@ def test_independent_worker_input_approval_and_checkpoint_survive_process_exit(t
     assert tick() == {"status": "idle"}
     with connect(settings.app_db_path) as connection:
         business = BusinessRepository(connection)
+        execution = connection.execute("SELECT execution_epoch, lease_worker_id, lease_expires_at, heartbeat_at FROM attempts WHERE attempt_id=?",
+                                       (task.current_attempt_id,)).fetchone()
+        assert tuple(execution) == (3, None, None, None)
         assert business.get_order("ORD-1001", task.owner_id).refunded_amount_minor == (12900 if decision == "approved" else 0)
         assert (business.get_successful_operation("ORD-1001", "request_refund", task.owner_id) is not None) == (decision == "approved")
     assert settings.checkpoint_db_path.is_file()
@@ -128,3 +131,6 @@ def test_claim_filters_identity_versions_and_persists_execution_failure_without_
     with connect(settings.app_db_path) as connection:
         persisted = TaskRepository(connection).get_attempt(task.task_id, task.current_attempt_id, task.owner_id)
         assert persisted.status == "failed"
+        lease = connection.execute("SELECT execution_epoch, lease_worker_id FROM attempts WHERE attempt_id=?",
+                                   (task.current_attempt_id,)).fetchone()
+        assert tuple(lease) == (1, None)

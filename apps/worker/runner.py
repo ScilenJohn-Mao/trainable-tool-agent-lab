@@ -7,13 +7,15 @@ from pathlib import Path
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+from apps.worker.scheduler import WorkerScheduler
 from tool_agent_lab.agent.config import AgentConfig, load_agent_config
 from tool_agent_lab.agent.graph import Agent
 from tool_agent_lab.agent.model_client import AssistantMessage, ModelClient
 from tool_agent_lab.agent.nodes import AgentNodes
 from tool_agent_lab.business.rules import BusinessRules
+from tool_agent_lab.runtime.leases import ExecutionLease, LeaseService
 from tool_agent_lab.runtime.task_service import change_status, load_current_attempt
-from tool_agent_lab.schemas.tasks import Attempt, TaskStatus
+from tool_agent_lab.schemas.tasks import TaskStatus
 from tool_agent_lab.settings import Settings
 from tool_agent_lab.storage.checkpoints import open_checkpoints
 from tool_agent_lab.storage.database import connect, initialize_database, transaction
@@ -56,31 +58,21 @@ def worker_lock(database: Path) -> Iterator[None]:
 
 class WorkerRunner:
     def __init__(self, settings: Settings, model: ModelClient, config: AgentConfig, saver: AsyncSqliteSaver,
-                 *, mock_responses: Sequence[AssistantMessage] = ()) -> None:
+                 *, mock_responses: Sequence[AssistantMessage] = (), lease_seconds: float = 30.0,
+                 heartbeat_interval: float = 10.0) -> None:
         self.settings = settings
         self.model = model
         self.config = config
         self.saver = saver
         self.mock_responses = tuple(mock_responses)
         self.rules = BusinessRules.from_file(settings.business_data_dir / "spec.json")
+        self.scheduler = WorkerScheduler(LeaseService(
+            settings.app_db_path, owner_id=settings.dev_owner_id, model_version=model.config.version,
+            config_version=config.version, business_time=self.rules.business_time, lease_seconds=lease_seconds,
+        ), heartbeat_interval=heartbeat_interval)
 
-    def claim_next(self) -> Attempt | None:
-        """Select and mark a compatible queued attempt in one immediate transaction."""
-        with transaction(self.settings.app_db_path) as connection:
-            row = connection.execute(
-                """SELECT t.task_id FROM tasks t JOIN attempts a ON a.attempt_id=t.current_attempt_id
-                AND a.task_id=t.task_id AND a.owner_id=t.owner_id
-                WHERE t.owner_id=? AND t.status='queued' AND a.status='queued'
-                AND a.model_version=? AND a.config_version=?
-                ORDER BY julianday(t.created_at), t.task_id LIMIT 1""",
-                (self.settings.dev_owner_id, self.model.config.version, self.config.version),
-            ).fetchone()
-            if row is None:
-                return None
-            tasks = TaskRepository(connection)
-            _, attempt = load_current_attempt(tasks, row["task_id"], self.settings.dev_owner_id)
-            change_status(tasks, EventRepository(connection), attempt, TaskStatus.RUNNING, self.rules.business_time)
-            return tasks.get_attempt(attempt.task_id, attempt.attempt_id, attempt.owner_id)
+    def claim_next(self) -> ExecutionLease | None:
+        return self.scheduler.leases.claim()
 
     def _agent(self, model_calls: int = 0) -> Agent:
         # Scripted replies restart at the saved decision offset; real clients retain their model cache.
@@ -94,7 +86,8 @@ class WorkerRunner:
                 """SELECT t.task_id FROM tasks t JOIN attempts a ON a.attempt_id=t.current_attempt_id
                 AND a.task_id=t.task_id AND a.owner_id=t.owner_id
                 WHERE t.owner_id=? AND t.status='running' AND a.status='running'
-                AND a.model_version=? AND a.config_version=? ORDER BY julianday(t.created_at), t.task_id""",
+                AND a.model_version=? AND a.config_version=? AND a.lease_worker_id IS NULL
+                ORDER BY julianday(t.created_at), t.task_id""",
                 (self.settings.dev_owner_id, self.model.config.version, self.config.version),
             ).fetchall()
         owner = self.settings.dev_owner_id
@@ -127,24 +120,35 @@ class WorkerRunner:
 
     async def run_once(self) -> dict | None:
         """Run one compatible task until completion or the next human waiting point."""
+        async with self.scheduler.slot:
+            return await self._run_once()
+
+    async def _run_once(self) -> dict | None:
         ready = await self._ready_reply()
         if ready:
             agent, task_id, request_id = ready
+            lease = self.scheduler.leases.claim(task_id=task_id)
         else:
-            attempt = self.claim_next()
-            if attempt is None:
+            lease = self.claim_next()
+            if lease is None:
                 return None
-            agent, task_id, request_id = self._agent(), attempt.task_id, None
+            agent, task_id, request_id = self._agent(), lease.attempt.task_id, None
+        if lease is None:
+            return None
         owner = self.settings.dev_owner_id
-        try:
-            state = await agent.resume(task_id, request_id, owner_id=owner) if request_id else await agent.start(task_id, owner_id=owner)
-        except Exception:
-            # An execution exception stops this task and propagates to the operator; no automatic replay.
-            with transaction(self.settings.app_db_path) as connection:
-                tasks = TaskRepository(connection)
-                _, attempt = load_current_attempt(tasks, task_id, owner)
-                change_status(tasks, EventRepository(connection), attempt, TaskStatus.FAILED, self.rules.business_time)
-            raise
+
+        async def invoke():
+            try:
+                return await agent.resume(task_id, request_id, owner_id=owner) if request_id else await agent.start(task_id, owner_id=owner)
+            except Exception:
+                # Execution exceptions propagate without automatic replay.
+                with transaction(self.settings.app_db_path) as connection:
+                    tasks = TaskRepository(connection)
+                    _, attempt = load_current_attempt(tasks, task_id, owner)
+                    change_status(tasks, EventRepository(connection), attempt, TaskStatus.FAILED, self.rules.business_time)
+                raise
+
+        state = await self.scheduler.execute(lease, invoke)
         interrupt = state.get("__interrupt__", ())
         return {"task_id": task_id, "thread_id": state["identity"]["thread_id"], "status": state["status"],
                 "waiting": interrupt[0].value if interrupt else None, "result": state["result"]}
@@ -152,8 +156,11 @@ class WorkerRunner:
 
 @asynccontextmanager
 async def open_worker(settings: Settings, model: ModelClient, *, config: AgentConfig | None = None,
-                      mock_responses: Sequence[AssistantMessage] = ()) -> AsyncIterator[WorkerRunner]:
+                      mock_responses: Sequence[AssistantMessage] = (), lease_seconds: float = 30.0,
+                      heartbeat_interval: float = 10.0) -> AsyncIterator[WorkerRunner]:
     with worker_lock(settings.app_db_path):
         initialize_database(settings.app_db_path)
         async with open_checkpoints(settings.checkpoint_db_path, application_database=settings.app_db_path) as saver:
-            yield WorkerRunner(settings, model, config or load_agent_config(), saver, mock_responses=mock_responses)
+            yield WorkerRunner(settings, model, config or load_agent_config(), saver,
+                               mock_responses=mock_responses, lease_seconds=lease_seconds,
+                               heartbeat_interval=heartbeat_interval)

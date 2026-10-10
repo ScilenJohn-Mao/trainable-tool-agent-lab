@@ -91,4 +91,25 @@ while task/attempt status, events and business ledger stay in the application
 database. The files have independent transactions. A crash inside execution,
 a running task without a checkpoint, or a non-waiting partial checkpoint needs
 explicit recovery and is not automatically rerun. Leases, heartbeat, ownership
-epochs, uncertain tool outcomes and crash reconciliation are not provided here.
+epochs are described below; uncertain tool outcomes and crash reconciliation
+still require explicit recovery.
+
+Each queued claim atomically increments the attempt's `execution_epoch`, records
+the worker ID and sets a finite lease. Resuming a recorded human reply claims a
+new epoch on the same attempt/thread. The scheduler serializes `run_once` calls
+and admits at most one live lease per application database. Waiting tasks release
+their lease so other tasks can run. Completion, execution errors and graceful
+cancellation also stop renewal and release the matching worker/epoch.
+
+`--lease-seconds` defaults to 30; `--heartbeat-interval` defaults to 10 and must
+be shorter than the lease. Heartbeats use real UTC time, independently of the
+fixed business clock. Renewal checks the current attempt, worker, epoch and
+deadline; an expired lease cannot renew. Renewal failure stops the invocation
+and propagates to the operator. Cancellation does not undo a committed action.
+
+`worker.scheduler.leases.expired()` reads compatible expired leases without
+changing task status, checkpoints or the ledger. A process crash leaves its lease
+available for this query after the deadline; ordinary polling does not reclaim
+or rerun it. Execution ownership is currently checked by lease renewal; business
+write transactions do not yet enforce the lease/epoch. An in-flight local model
+thread or external tool may continue after invocation cancellation.
