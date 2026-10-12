@@ -437,3 +437,5 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 包内 `PACKAGE_MANIFEST.json` 包含每个源码文件的大小和 SHA-256、内容版本、规则版本及可用的 Git 信息；清单不递归计算自身哈希。上传与解压更新见 [部署说明](deploy/README.md)。
 
 可信运行时如何发布提案并执行批准动作，见[执行器接口](docs/executor.md)。
+
+独立场景、仿真用户与真实 MCP 的脚本模型演示，见[业务仿真说明](docs/simulation.md)。
