@@ -14,7 +14,7 @@ from tool_agent_lab.schemas.actions import (
     ActionProposal, Approval, ApprovalRequest, CouponAction, ExecutionContext, HandoffAction,
 )
 from tool_agent_lab.schemas.business import Operation, Order
-from tool_agent_lab.schemas.tasks import Attempt, Task, TaskStatus
+from tool_agent_lab.schemas.tasks import Attempt, AttemptIdentity, Task, TaskStatus
 from tool_agent_lab.settings import PROJECT_ROOT
 from tool_agent_lab.storage.business_repository import BusinessRepository
 from tool_agent_lab.storage.database import connect, initialize_database, transaction
@@ -502,8 +502,7 @@ def test_query_is_owned_and_readable_after_cancel_without_write_binding(case: di
         tasks.add_attempt(foreign_attempt)
         tasks.set_status(context.task_id, context.owner_id, TaskStatus.CANCELLED)
     foreign_context = ExecutionContext(**{
-        name: getattr(foreign_attempt, name) for name in ExecutionContext.model_fields
-        if name not in ("business_time", "write_binding")
+        name: getattr(foreign_attempt, name) for name in AttemptIdentity.model_fields
     }, business_time=context.business_time)
     assert service.get_operation(pending.operation_key, foreign_context) is None
     assert service.get_operation("unknown-key", context) is None

@@ -10,7 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.business.service import BusinessError, BusinessService
 from tool_agent_lab.runtime.task_service import TaskService
-from tool_agent_lab.schemas.actions import ActionProposal, ExecutionContext, WriteBinding
+from tool_agent_lab.schemas.actions import ActionProposal, ExecutionContext, ExecutionLeaseBinding, WriteBinding
 from tool_agent_lab.schemas.common import NonEmptyStr
 from tool_agent_lab.schemas.tasks import AttemptIdentity
 from tool_agent_lab.storage.business_repository import BusinessRepository
@@ -25,11 +25,13 @@ class ToolExecutor:
         self, database: str | Path, rules: BusinessRules, identity: AttemptIdentity, *,
         data_dir: str | Path, business_time: datetime | None = None,
         clarification_attempted: bool = False,
+        execution_lease: ExecutionLeaseBinding | None = None,
     ) -> None:
         self.database = Path(database).resolve()
         self.data_dir = Path(data_dir).resolve()
         self.context = ExecutionContext(
             **identity.model_dump(), business_time=business_time or rules.business_time,
+            execution_lease=execution_lease,
         )
         self.clarification_attempted = clarification_attempted
         self.business = BusinessService(self.database, rules)

@@ -15,6 +15,7 @@ from tool_agent_lab.agent.nodes import AgentNodes
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.leases import ExecutionLease, LeaseService
 from tool_agent_lab.runtime.task_service import change_status, load_current_attempt
+from tool_agent_lab.schemas.actions import ExecutionLeaseBinding
 from tool_agent_lab.schemas.tasks import TaskStatus
 from tool_agent_lab.settings import Settings
 from tool_agent_lab.storage.checkpoints import open_checkpoints
@@ -136,6 +137,9 @@ class WorkerRunner:
         if lease is None:
             return None
         owner = self.settings.dev_owner_id
+        agent.nodes.execution_lease = ExecutionLeaseBinding(
+            worker_id=lease.worker_id, execution_epoch=lease.execution_epoch,
+        )
 
         async def invoke():
             try:

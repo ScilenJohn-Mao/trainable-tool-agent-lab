@@ -9,6 +9,15 @@
 上下文并用作授权。`clarification_attempted` 也是运行时事实，仅在实际完成澄清后
 设置；它不是工具的模型参数。订单无法确定且没有澄清事实时，转人工也会被拒绝。
 
+worker 调用还携带 `context.execution_lease`，包含本次领取的 `worker_id` 和
+`execution_epoch`，经可信 MCP 启动上下文传递，不进入模型参数或持久图状态。
+prepare/execute 在各自的 `BEGIN IMMEDIATE` 事务中、写入前重新读取尝试租约，
+核对 worker、epoch 和现实 UTC 截止时间（与业务固定时间独立）。截止时刻本身
+已视为过期。缺少绑定返回 `execution_lease_required`；过期、释放或不匹配返回
+`execution_lease_lost`，不消费批准、不改金额，已有 pending 保持原样。
+尚未进入 worker 调度的 epoch=0 尝试仍支持直接调用；一旦领取过，即使释放租约
+也必须携带当前有效绑定。已提交的同键回执及只读账本查询不要求有效租约。
+
 调用前必须已保存任务、当前尝试、提案及完整批准快照。可信运行时为
 `context.write_binding` 分配操作键，再调用 `service.prepare(action, context)`。
 准备接口复用执行的授权与业务规则检查，在独立事务中保存 pending 记录；返回前

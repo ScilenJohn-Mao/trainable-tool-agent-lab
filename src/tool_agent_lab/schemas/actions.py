@@ -125,8 +125,16 @@ class WriteBinding(ContractModel):
     operation_key: NonEmptyStr
 
 
+class ExecutionLeaseBinding(ContractModel):
+    """The claim held by this invocation; never resolved from model arguments."""
+
+    worker_id: NonEmptyStr
+    execution_epoch: PositiveInt
+
+
 class ExecutionContext(AttemptIdentity):
     """Trusted runtime envelope, separate from model-visible business parameters."""
 
     business_time: AwareDatetime
     write_binding: WriteBinding | None = None
+    execution_lease: ExecutionLeaseBinding | None = None

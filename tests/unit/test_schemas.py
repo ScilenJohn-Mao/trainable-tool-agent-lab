@@ -93,7 +93,7 @@ def test_user_and_model_parameters_cannot_carry_runtime_authority(records: dict)
         ApprovalRequest.model_validate(records["approval_request"] | {
             "parameters": records["proposal"]["parameters"],
         })
-    for field in ("operation_key", "execution_context", "approved"):
+    for field in ("operation_key", "execution_context", "execution_lease", "execution_epoch", "worker_id", "approved"):
         with pytest.raises(ValidationError, match=field):
             RefundAction.model_validate(records["proposal"]["parameters"] | {field: "injected"})
 
@@ -127,6 +127,18 @@ def test_read_context_is_valid_but_partial_write_binding_is_not(records: dict) -
         ExecutionContext.model_validate(context | {"write_binding": {
             "proposal_id": "p1", "proposal_version": 1, "operation_key": "op1",
         }})
+
+
+def test_execution_lease_binding_roundtrips_without_changing_attempt_identity(records: dict) -> None:
+    context = ExecutionContext.model_validate(records["context"] | {"execution_lease": {
+        "worker_id": "worker-one", "execution_epoch": 2,
+    }})
+    assert ExecutionContext.model_validate_json(context.model_dump_json()) == context
+    assert context.execution_lease.execution_epoch == 2
+    assert context.thread_id == records["attempt"]["thread_id"]
+    for binding in ({"worker_id": "worker-one"}, {"worker_id": "worker-one", "execution_epoch": 0}):
+        with pytest.raises(ValidationError, match="execution_epoch"):
+            ExecutionContext.model_validate(records["context"] | {"execution_lease": binding})
 
 
 @pytest.mark.parametrize("model,key,field", [

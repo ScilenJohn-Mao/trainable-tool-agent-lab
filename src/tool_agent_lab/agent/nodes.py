@@ -17,7 +17,7 @@ from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.knowledge.citations import validate_citation
 from tool_agent_lab.knowledge.ingest import PolicyCatalog
 from tool_agent_lab.runtime.task_service import TaskError, change_status, load_current_attempt
-from tool_agent_lab.schemas.actions import PolicyReference
+from tool_agent_lab.schemas.actions import ExecutionLeaseBinding, PolicyReference
 from tool_agent_lab.schemas.common import NonEmptyStr
 from tool_agent_lab.schemas.results import ConclusionDraft, QuestionDraft, build_result
 from tool_agent_lab.schemas.tasks import TaskStatus
@@ -34,6 +34,7 @@ class AgentNodes:
     rules: BusinessRules
     model: ModelClient
     config: AgentConfig = field(default_factory=load_agent_config)
+    execution_lease: ExecutionLeaseBinding | None = None
     policy_catalog: PolicyCatalog = field(init=False)
 
     def __post_init__(self) -> None:
@@ -47,6 +48,7 @@ class AgentNodes:
         return ToolExecutor(
             self.database, self.rules, identity_of(state), data_dir=self.data_dir,
             clarification_attempted=state["clarification_attempted"],
+            execution_lease=self.execution_lease,
         )
 
     def status(self, state: AgentState, status: TaskStatus, event=None) -> None:

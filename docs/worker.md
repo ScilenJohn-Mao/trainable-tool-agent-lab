@@ -110,6 +110,12 @@ and propagates to the operator. Cancellation does not undo a committed action.
 `worker.scheduler.leases.expired()` reads compatible expired leases without
 changing task status, checkpoints or the ledger. A process crash leaves its lease
 available for this query after the deadline; ordinary polling does not reclaim
-or rerun it. Execution ownership is currently checked by lease renewal; business
-write transactions do not yet enforce the lease/epoch. An in-flight local model
-thread or external tool may continue after invocation cancellation.
+or rerun it. Each invocation passes its claimed worker ID and epoch through the
+trusted MCP context. Preparing or committing a new business operation rechecks
+that binding and the real UTC lease deadline inside the business transaction.
+Expired, released or superseded claims cannot consume approval or change business
+state. The binding stays outside checkpoint state and model tool arguments; a
+resumed invocation uses its new claim. Committed receipts and read-only operation
+lookups remain available after lease loss. An in-flight local model thread or
+external tool may continue after invocation cancellation, but cannot bypass this
+write check.

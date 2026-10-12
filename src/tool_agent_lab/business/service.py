@@ -1,6 +1,6 @@
 """Recheck persisted authorization and atomically commit simulated business writes."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from tool_agent_lab.business.rules import BusinessRules, RuleDecision
@@ -57,6 +57,7 @@ class BusinessService:
             prepared_at = existing.created_at if existing is not None else context.business_time
             self._check_pending_authorization(tasks, task, attempt, proposal, approval, context, prepared_at)
             self._eligible_business(business, action, context, clarification_attempted)
+            self._check_execution_lease(tasks, context)
             if existing is not None:
                 return existing
             operation = Operation(
@@ -102,6 +103,7 @@ class BusinessService:
                 tasks, task, attempt, proposal, approval, context, operation.created_at,
             )
             order, decision = self._eligible_business(business, action, context, clarification_attempted)
+            self._check_execution_lease(tasks, context)
             now = context.business_time
             if not tasks.consume_approval(context.task_id, binding.approval_request_id, context.owner_id, now):
                 raise BusinessError("confirmation_consumed")
@@ -188,6 +190,25 @@ class BusinessService:
             raise BusinessError("authorization_time_mismatch")
         if tasks.approval_consumed_at(context.task_id, context.write_binding.approval_request_id, context.owner_id) is not None:
             raise BusinessError("confirmation_consumed")
+
+    def _check_execution_lease(self, tasks: TaskRepository, context: ExecutionContext) -> None:
+        """Fence writes on the same locked connection used to consume approval and commit."""
+        row = tasks.connection.execute(
+            """SELECT execution_epoch, lease_worker_id, lease_expires_at FROM attempts
+            WHERE task_id=? AND attempt_id=? AND owner_id=?""",
+            (context.task_id, context.attempt_id, context.owner_id),
+        ).fetchone()
+        binding = context.execution_lease
+        # Direct application calls remain supported until this attempt first enters worker scheduling.
+        if row["execution_epoch"] == 0 and binding is None:
+            return
+        if binding is None:
+            raise BusinessError("execution_lease_required")
+        if (row["execution_epoch"] != binding.execution_epoch
+                or row["lease_worker_id"] != binding.worker_id
+                or row["lease_expires_at"] is None
+                or datetime.fromisoformat(row["lease_expires_at"]) <= datetime.now(timezone.utc)):
+            raise BusinessError("execution_lease_lost")
 
     def _eligible_business(
         self, business: BusinessRepository, action: ActionParameters, context: ExecutionContext,
