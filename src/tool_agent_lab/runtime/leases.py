@@ -108,6 +108,33 @@ class LeaseService:
                 raise LeaseLost("Execution lease is expired or no longer owned")
         return ExecutionLease(lease.attempt, lease.worker_id, lease.execution_epoch, expires, timestamp)
 
+    def reclaim(self, task_id: str, execution_epoch: int, *, now: datetime | None = None) -> ExecutionLease | None:
+        """Explicitly fence an interrupted claim; ordinary polling never takes this path."""
+        timestamp = _utc(now or utc_now())
+        expires = timestamp + timedelta(seconds=self.lease_seconds)
+        with transaction(self.database) as connection:
+            if connection.execute(
+                """SELECT 1 FROM attempts WHERE lease_worker_id IS NOT NULL
+                AND julianday(lease_expires_at)>julianday(?) LIMIT 1""", (timestamp.isoformat(),),
+            ).fetchone():
+                return None
+            row = connection.execute(
+                """UPDATE attempts SET execution_epoch=execution_epoch+1, lease_worker_id=?,
+                lease_expires_at=?, heartbeat_at=? WHERE task_id=? AND owner_id=?
+                AND model_version=? AND config_version=? AND execution_epoch=? AND execution_epoch>0
+                AND status IN ('running','waiting_input','waiting_approval','completed','failed')
+                AND (lease_worker_id IS NULL OR julianday(lease_expires_at)<=julianday(?))
+                AND EXISTS (SELECT 1 FROM tasks t WHERE t.task_id=attempts.task_id
+                    AND t.owner_id=attempts.owner_id AND t.current_attempt_id=attempts.attempt_id
+                    AND t.status=attempts.status) RETURNING *""",
+                (self.worker_id, expires.isoformat(), timestamp.isoformat(), task_id, self.owner_id,
+                 self.model_version, self.config_version, execution_epoch, timestamp.isoformat()),
+            ).fetchone()
+            if row is None:
+                return None
+            attempt = TaskRepository(connection).get_attempt(task_id, row["attempt_id"], self.owner_id)
+            return ExecutionLease(attempt, self.worker_id, row["execution_epoch"], expires, timestamp)
+
     def release(self, lease: ExecutionLease) -> bool:
         """Clear the matching lease while retaining the epoch and task's business status."""
         with transaction(self.database) as connection:

@@ -154,10 +154,23 @@ class AgentNodes:
                 call_id=call["id"], payload={"tool": call["function"]["name"], "arguments": arguments})
         reply = await self.executor(state).call_tool(call["function"]["name"], arguments, call_id=call["id"])
         result = reply.result.model_dump(mode="json")
+        return self.record_tool_result(state, result)
+
+    def record_tool_result(self, state: AgentState, result: dict) -> dict:
+        """Use the same result/event conversion for a tool reply or an owned ledger receipt."""
+        call = state["active_call"]
         logged_result = json.loads(bounded_tool_result(call["function"]["name"], result, self.config.budgets.max_tool_output_bytes))
         with transaction(self.database) as connection:
-            EventRepository(connection).append(identity_of(state), "tool_result", self.rules.business_time,
-                call_id=call["id"], payload={"tool": call["function"]["name"], "result": logged_result})
+            identity = identity_of(state)
+            payload = {"tool": call["function"]["name"], "result": logged_result}
+            stored = connection.execute(
+                """SELECT payload_json FROM events WHERE task_id=? AND attempt_id=? AND owner_id=?
+                AND event_type='tool_result' AND call_id=? ORDER BY seq DESC LIMIT 1""",
+                (identity.task_id, identity.attempt_id, identity.owner_id, call["id"]),
+            ).fetchone()
+            if stored is None or json.loads(stored["payload_json"]) != payload:
+                EventRepository(connection).append(identity, "tool_result", self.rules.business_time,
+                    call_id=call["id"], payload=payload)
         update = self.tool_result(state, result)
         if result["status"] == "ok":
             name, data = call["function"]["name"], result["data"]

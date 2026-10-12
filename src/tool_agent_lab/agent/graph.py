@@ -62,7 +62,7 @@ class Agent:
             raise TaskError("graph_already_started")
         TaskService(self.nodes.database, business_time=self.nodes.rules.business_time).start(task_id, owner_id=owner_id)
         state["status"] = "running"
-        return await self.graph.ainvoke(state, config)
+        return await self.graph.ainvoke(state, config, durability="sync")
 
     async def snapshot(self, task_id: str, *, owner_id: str):
         state, config = self.binding(task_id, owner_id)
@@ -81,7 +81,15 @@ class Agent:
         else:
             raise TaskError("graph_not_waiting")
         _, config = self.binding(task_id, owner_id)
-        return await self.graph.ainvoke(Command(resume=value), config)
+        return await self.graph.ainvoke(Command(resume=value), config, durability="sync")
+
+    async def continue_task(self, task_id: str, *, owner_id: str):
+        """Continue unfinished nodes from the latest persisted checkpoint on this thread."""
+        snapshot = await self.snapshot(task_id, owner_id=owner_id)
+        if not snapshot.next:
+            return snapshot.values
+        _, config = self.binding(task_id, owner_id)
+        return await self.graph.ainvoke(None, config, durability="sync")
 
     async def submit_input(self, task_id: str, request: InputRequest, *, owner_id: str):
         snapshot = await self.snapshot(task_id, owner_id=owner_id)

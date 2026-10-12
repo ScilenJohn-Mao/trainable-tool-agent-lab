@@ -14,7 +14,8 @@ from tool_agent_lab.agent.model_client import AssistantMessage, ModelClient
 from tool_agent_lab.agent.nodes import AgentNodes
 from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.leases import ExecutionLease, LeaseService
-from tool_agent_lab.runtime.task_service import change_status, load_current_attempt
+from tool_agent_lab.runtime.recovery import continue_recovery, inspect_recovery, recorded_reply
+from tool_agent_lab.runtime.task_service import TaskError, change_status, load_current_attempt
 from tool_agent_lab.schemas.actions import ExecutionLeaseBinding
 from tool_agent_lab.schemas.tasks import TaskStatus
 from tool_agent_lab.settings import Settings
@@ -99,22 +100,7 @@ class WorkerRunner:
             if not snapshot.values:
                 continue
             state = snapshot.values
-            with connect(self.settings.app_db_path) as connection:
-                if snapshot.next == ("wait_approval",):
-                    proposal = state["proposal"]
-                    receipt = TaskRepository(connection).get_proposal_approval(
-                        row["task_id"], proposal["proposal_id"], proposal["proposal_version"], owner)
-                    request_id = receipt.request.request_id if receipt else None
-                elif snapshot.next == ("wait_input",):
-                    received = connection.execute(
-                        """SELECT json_extract(payload_json,'$.request_id') FROM events
-                        WHERE task_id=? AND attempt_id=? AND owner_id=? AND event_type='input_received'
-                        AND json_extract(payload_json,'$.input_request_id')=? ORDER BY seq DESC LIMIT 1""",
-                        (row["task_id"], state["identity"]["attempt_id"], owner, state["waiting"]["request_id"]),
-                    ).fetchone()
-                    request_id = received[0] if received else None
-                else:
-                    continue
+            request_id = recorded_reply(self.settings.app_db_path, snapshot)
             if request_id:
                 return self._agent(state["model_calls"]), row["task_id"], request_id
         return None
@@ -137,24 +123,53 @@ class WorkerRunner:
         if lease is None:
             return None
         owner = self.settings.dev_owner_id
+        return await self._execute(lease, agent, lambda: (
+            agent.resume(task_id, request_id, owner_id=owner) if request_id else agent.start(task_id, owner_id=owner)
+        ))
+
+    async def recover(self, task_id: str) -> dict:
+        """Explicitly resume this worker's compatible interrupted attempt, never create another thread."""
+        async with self.scheduler.slot:
+            agent = self._agent()
+            plan = await inspect_recovery(agent, task_id, owner_id=self.settings.dev_owner_id)
+            if plan.complete:
+                return self._outcome(plan.snapshot.values)
+            lease = self.scheduler.leases.reclaim(task_id, plan.execution_epoch)
+            if lease is None:
+                raise TaskError("recovery_lease_unavailable")
+            agent = self._agent(plan.snapshot.values["model_calls"] if plan.snapshot.values else 0)
+            return await self._execute(lease, agent, lambda: continue_recovery(agent, plan))
+
+    async def _execute(self, lease: ExecutionLease, agent: Agent, operation) -> dict:
+        task_id, owner = lease.attempt.task_id, lease.attempt.owner_id
         agent.nodes.execution_lease = ExecutionLeaseBinding(
             worker_id=lease.worker_id, execution_epoch=lease.execution_epoch,
         )
 
         async def invoke():
             try:
-                return await agent.resume(task_id, request_id, owner_id=owner) if request_id else await agent.start(task_id, owner_id=owner)
+                return await operation()
             except Exception:
                 # Execution exceptions propagate without automatic replay.
                 with transaction(self.settings.app_db_path) as connection:
                     tasks = TaskRepository(connection)
                     _, attempt = load_current_attempt(tasks, task_id, owner)
-                    change_status(tasks, EventRepository(connection), attempt, TaskStatus.FAILED, self.rules.business_time)
+                    current = connection.execute(
+                        "SELECT execution_epoch, lease_worker_id FROM attempts WHERE attempt_id=?",
+                        (attempt.attempt_id,),
+                    ).fetchone()
+                    if (attempt.attempt_id == lease.attempt.attempt_id
+                            and tuple(current) == (lease.execution_epoch, lease.worker_id)):
+                        change_status(tasks, EventRepository(connection), attempt, TaskStatus.FAILED, self.rules.business_time)
                 raise
 
         state = await self.scheduler.execute(lease, invoke)
+        return self._outcome(state)
+
+    @staticmethod
+    def _outcome(state: dict) -> dict:
         interrupt = state.get("__interrupt__", ())
-        return {"task_id": task_id, "thread_id": state["identity"]["thread_id"], "status": state["status"],
+        return {"task_id": state["identity"]["task_id"], "thread_id": state["identity"]["thread_id"], "status": state["status"],
                 "waiting": interrupt[0].value if interrupt else None, "result": state["result"]}
 
 

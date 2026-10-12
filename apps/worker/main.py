@@ -27,6 +27,9 @@ async def run(args: argparse.Namespace) -> None:
             (PROJECT_ROOT / args.mock_responses).read_text(encoding="utf-8"))
     async with open_worker(settings, model, config=config, mock_responses=replies,
                            lease_seconds=args.lease_seconds, heartbeat_interval=args.heartbeat_interval) as worker:
+        if args.recover_task:
+            print(json.dumps(await worker.recover(args.recover_task), ensure_ascii=False), flush=True)
+            return
         while True:
             outcome = await worker.run_once()
             if outcome is not None or args.once:
@@ -44,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--agent-config", type=Path, help="Override application's agent_config_file")
     parser.add_argument("--mock-responses", type=Path, help="Explicit assistant-message JSON array, replayed per task")
     parser.add_argument("--once", action="store_true", help="Process one ready task or report idle and exit")
+    parser.add_argument("--recover-task", help="Recover one interrupted task on its original thread, then exit")
     parser.add_argument("--poll-interval", type=float, default=0.5)
     parser.add_argument("--lease-seconds", type=float, default=30.0)
     parser.add_argument("--heartbeat-interval", type=float, default=10.0)

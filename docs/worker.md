@@ -91,8 +91,31 @@ while task/attempt status, events and business ledger stay in the application
 database. The files have independent transactions. A crash inside execution,
 a running task without a checkpoint, or a non-waiting partial checkpoint needs
 explicit recovery and is not automatically rerun. Leases, heartbeat, ownership
-epochs are described below; uncertain tool outcomes and crash reconciliation
-still require explicit recovery.
+epochs are described below. To recover one interrupted task and exit:
+
+```powershell
+uv run --no-sync --cache-dir .uv-cache python -m apps.worker.main --app-config configs/app.yaml --recover-task TASK_ID
+```
+
+Use the original model/Agent versions and the same runtime directory. Mock
+execution still requires the original `--mock-responses` script. Recovery takes
+a new epoch only after the old lease expires (or was released); a live lease,
+another active execution, cancelled task or incompatible version is refused.
+It resumes the original attempt/thread from the latest SQLite checkpoint using
+LangGraph's continuation/resume APIs. Graph invocations use synchronous checkpoint
+durability so the previous node is saved before the next node starts.
+
+A pending operation continues with its original key and normal authorization.
+If the write committed before its graph result was saved, recovery loads the
+owned approval/ledger receipt into the graph and continues without calling the
+write tool again. An identical result event already saved is reused. Human
+waiting points remain waiting unless a matching receipt was already recorded;
+recovery never approves or invents input. Completed results can be read again.
+If the checkpoint is missing while the attempt has ledger records, recovery
+stops rather than restarting its decisions. A claim interrupted before any
+checkpoint or business operation can start on the same attempt/thread. Ordinary
+polling does not reclaim crashes, and failed executions are not automatically
+retried. Recovery does not undo committed actions.
 
 Each queued claim atomically increments the attempt's `execution_epoch`, records
 the worker ID and sets a finite lease. Resuming a recorded human reply claims a
