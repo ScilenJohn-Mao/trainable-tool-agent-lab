@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from art_trainlab.adapter import ARTModelClient
-from art_trainlab.config import TrainingConfig, load_config
+from art_trainlab.config import TrainingConfig, load_config, offline_environment
 from art_trainlab.recorder import IntegrityError, Recorder, compare_art_sequences, token_data, verify_group
 from art_trainlab.rollout import ARTInterfaces, sample_group
 from art_trainlab.train import backend_model_arguments, check, preflight
@@ -26,6 +26,25 @@ def completion(message=None, *, response_id="completion"):
         "prompt_token_ids": [10, 11], "token_ids": [20, 21],
         "logprobs": {"content": [{"token": "token_id:20", "logprob": -.1}, {"token": "token_id:21", "logprob": -.2}]}}],
         "usage": {"prompt_tokens": 2, "completion_tokens": 2, "total_tokens": 4}}
+
+
+def test_fixed_cuda_profile_and_matching_torchvision_lock(monkeypatch):
+    import os
+    import tomllib
+
+    keys = ("ART_VLLM_RUNTIME_CUDA_PROFILE", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE",
+            "HF_DATASETS_OFFLINE", "HF_HUB_DISABLE_TELEMETRY", "WANDB_MODE", "WEAVE_DISABLED",
+            "LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "WANDB_API_KEY", "WEAVE_API_KEY", "LANGSMITH_API_KEY")
+    for key in keys:
+        monkeypatch.setenv(key, "test-value")
+    monkeypatch.setenv("ART_VLLM_RUNTIME_CUDA_PROFILE", "cuda13")
+    offline_environment()
+    assert os.environ["ART_VLLM_RUNTIME_CUDA_PROFILE"] == "cuda12"
+    root = Path(__file__).resolve().parents[2] / "training/art"
+    lock = tomllib.loads((root / "uv.lock").read_text(encoding="utf-8"))
+    vision = next(p for p in lock["package"] if p["name"] == "torchvision")
+    assert vision["version"] == "0.26.0+cu128"
+    assert vision["source"]["registry"] == "https://download.pytorch.org/whl/cu128"
 
 
 def record(response=None):

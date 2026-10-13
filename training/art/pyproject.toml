@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "trainable-tool-agent-lab",
   "openpipe-art[backend,langgraph]==0.5.20",
+  "torchvision==0.26.0+cu128",
 ]
 
 [build-system]
@@ -26,6 +27,7 @@ constraint-dependencies = [
 trainable-tool-agent-lab = { path = "../..", editable = true }
 openpipe-art = { git = "https://github.com/OpenPipe/ART.git", rev = "12162f241320f2343f1df162e834dc5ae03f740d" }
 torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

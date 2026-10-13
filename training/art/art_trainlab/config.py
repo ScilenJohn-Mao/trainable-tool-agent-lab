@@ -78,7 +78,8 @@ def load_config(path):
 
 def offline_environment():
     """Set process-local offline settings before ART, model or tracing imports."""
-    os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_DATASETS_OFFLINE="1",
+    os.environ.update(ART_VLLM_RUNTIME_CUDA_PROFILE="cuda12",
+                      HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_DATASETS_OFFLINE="1",
                       HF_HUB_DISABLE_TELEMETRY="1", WANDB_MODE="disabled", WEAVE_DISABLED="true",
                       LANGSMITH_TRACING="false", LANGCHAIN_TRACING_V2="false")
     for key in ("WANDB_API_KEY", "WEAVE_API_KEY", "LANGSMITH_API_KEY"):

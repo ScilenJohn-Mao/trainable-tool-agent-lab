@@ -2450,12 +2450,14 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "openpipe-art", extra = ["backend", "langgraph"], marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "torchvision", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "trainable-tool-agent-lab", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "openpipe-art", extras = ["backend", "langgraph"], git = "https://github.com/OpenPipe/ART.git?rev=12162f241320f2343f1df162e834dc5ae03f740d" },
+    { name = "torchvision", specifier = "==0.26.0+cu128", index = "https://download.pytorch.org/whl/cu128" },
     { name = "trainable-tool-agent-lab", editable = "../../" },
 ]
 
@@ -2494,15 +2496,15 @@ wheels = [
 
 [[package]]
 name = "torchvision"
-version = "0.26.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.26.0+cu128"
+source = { registry = "https://download.pytorch.org/whl/cu128" }
 dependencies = [
     { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "pillow", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/d8/cb6ccda1a1f35a6597645818641701207b3e8e13553e75fce5d86bac74b2/torchvision-0.26.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:d61a5abb6b42a0c0c311996c2ac4b83a94418a97182c83b055a2a4ae985e05aa", size = 7522205, upload-time = "2026-03-23T18:12:54.654Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.26.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ccf26b4b659cfce6f2208cb8326071d51c70219a34856dfdf468d1e19af52c0d", upload-time = "2026-03-23T15:36:22Z" },
 ]
 
 [[package]]
