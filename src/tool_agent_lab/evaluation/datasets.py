@@ -330,7 +330,7 @@ def audit_scenario(scenario: DatasetScenario, asset: dict) -> None:
         raise ValueError("Scenario condition key mismatch")
     if scenario.template_family != f"{scenario.cohort}:{scenario.task_type}" or not scenario.request.user_message.startswith(INTRO[scenario.cohort]):
         raise ValueError("Scenario template family mismatch")
-    if scenario.initial_state.data_dir.as_posix() != f"assets/{scenario.fixture_version}":
+    if scenario.initial_state.data_dir.as_posix().replace("\\", "/") != f"assets/{scenario.fixture_version}":
         raise ValueError("Scenario asset path mismatch")
     order = scenario.initial_state.orders[0] if scenario.initial_state.orders else None
     if order and (order.owner_id != scenario.owner_id or order.order_id != scenario.expected.order_id):
@@ -498,4 +498,6 @@ def load_dataset(path: str | Path, split: Literal["train", "validation", "test"]
     root = Path(path).resolve()
     validate_frozen(root)
     rows = [DatasetScenario.model_validate_json(line) for line in (root / (split + ".jsonl")).read_text(encoding="utf-8").splitlines()]
-    return tuple(s.model_copy(update={"initial_state": s.initial_state.model_copy(update={"data_dir": root / s.initial_state.data_dir})}) for s in rows)
+    return tuple(s.model_copy(update={"initial_state": s.initial_state.model_copy(update={
+        "data_dir": root / Path(s.initial_state.data_dir.as_posix().replace("\\", "/")),
+    })}) for s in rows)

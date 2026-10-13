@@ -1,10 +1,11 @@
 import json
+from pathlib import PurePosixPath
 
 import pytest
 
 from tool_agent_lab.evaluation.datasets import (
     INTRO, QUERY_STORIES, STORIES, TASK_TYPES, UNVERIFIED_STORIES,
-    audit_splits, build_dataset, generate_splits, load_dataset, policy_assets, text_hash, validate_frozen,
+    audit_scenario, audit_splits, build_dataset, generate_splits, load_dataset, policy_assets, text_hash, validate_frozen,
 )
 from tool_agent_lab.settings import PROJECT_ROOT
 
@@ -52,6 +53,16 @@ def test_source_fingerprints_ignore_checkout_line_endings(tmp_path):
     lf.write_bytes(b"first\nsecond\n")
     crlf.write_bytes(b"first\r\nsecond\r\n")
     assert text_hash(lf) == text_hash(crlf)
+
+
+def test_scenario_audit_accepts_windows_asset_separators_on_posix(assets):
+    splits = generate_splits(assets, profile="small")
+    for rows in splits.values():
+        for row in rows:
+            changed = row.model_copy(update={"initial_state": row.initial_state.model_copy(update={
+                "data_dir": PurePosixPath("assets\\" + row.fixture_version),
+            })})
+            audit_scenario(changed, assets[row.fixture_version])
 
 
 def test_reproducible_build_and_loading_hydrates_portable_asset_paths(tmp_path):
