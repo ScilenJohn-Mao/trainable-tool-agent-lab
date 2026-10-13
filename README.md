@@ -439,3 +439,5 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 可信运行时如何发布提案并执行批准动作，见[执行器接口](docs/executor.md)。
 
 独立场景、仿真用户与真实 MCP 的脚本模型演示，见[业务仿真说明](docs/simulation.md)。
+
+固定训练与评测场景的构建、冻结核验及加载接口，见[数据集说明](docs/datasets.md)。

@@ -1,0 +1,164 @@
+{
+  "files": {
+    "assets/business-v1/policies.json": {
+      "bytes": 23316,
+      "sha256": "1fa8f3b61f349347a128d8bfb8c8a6570baf1a1000b8c238a44ce536decee5a0"
+    },
+    "assets/business-v1/policy_specs.json": {
+      "bytes": 1236,
+      "sha256": "0bfaf53e38ece55712a9d5f64d35561b84917d27c55b779ca3b2020f1d6616e2"
+    },
+    "assets/business-v1/spec.json": {
+      "bytes": 1215,
+      "sha256": "3af074eade54e4ca99399c811c9456680ed7affb2053368e1e46cca896dca420"
+    },
+    "assets/business-v2/policies.json": {
+      "bytes": 44931,
+      "sha256": "cdc0f5ef43b0524e6b570b5e4c9a3f1c66a18a4495cf4d5e6e63daa222aa4d9f"
+    },
+    "assets/business-v2/policy_specs.json": {
+      "bytes": 2681,
+      "sha256": "673b16b99858ec2a79442600ac9d5dab07aae8f75b3a6d888c2bd4caf818454a"
+    },
+    "assets/business-v2/spec.json": {
+      "bytes": 1216,
+      "sha256": "8834cc0ae5532d55ef98fd49453390af0d7e3ee9b02d9d4728087e6c0855dd6e"
+    },
+    "review_sample.jsonl": {
+      "bytes": 73645,
+      "sha256": "e3abcc1dd635d19146870f90b7f45a7da81cb231b763ac02e53f6f7cb0e94b55"
+    },
+    "test.jsonl": {
+      "bytes": 304450,
+      "sha256": "ff91478975c69a24b4b416f60a3d450bb9f8c5e2863066a0d5b906712e4d21a1"
+    },
+    "train.jsonl": {
+      "bytes": 592035,
+      "sha256": "db0d1d9455c960daa5cc04d9b72113edd4137bdfe5614ebb909722f3e16b1ee9"
+    },
+    "validation.jsonl": {
+      "bytes": 150160,
+      "sha256": "707314f0d46859d16354b3119c008881d775c14801fae2388673f1c57ff9f791"
+    }
+  },
+  "frozen": true,
+  "generator_sha256": "4014d92726e4b64d55872d3ca65e0fc544695bf07df6f24d3357cb94975c97e4",
+  "index_fingerprints": {
+    "business-v1": "12957ae9321d03078a1b7ae23ea5a38fc5096ce48d2d935297b68f2ceff64893",
+    "business-v2": "292354de565231876eadd7541367814dca3ae106e1d12829dd76941aeb6095e7"
+  },
+  "isolation": {
+    "instance_and_paraphrases": "same_split",
+    "new_instance_conditions": "development_conditions_allowed",
+    "template_families": "disjoint_splits",
+    "unseen_combinations": "disjoint_train_validation",
+    "unseen_policy": "business-v2_test_only"
+  },
+  "profile": "full",
+  "review_sample_ids": [
+    "case-a3ab0764554eb276-a",
+    "case-ce8ceecf1b052e0b-a",
+    "case-c8007ce0bf5b1b3a-a",
+    "case-f78e56d2907a61c0-a",
+    "case-f35ff89fe28e7bd9-a",
+    "case-3b88f065437e1e1e-a",
+    "case-eb100a871fad3c3d-a",
+    "case-e0337b9da79b454b-a",
+    "case-e4316feee019bc1a-a",
+    "case-cb95d37cd13a178c-a",
+    "case-774c2c90e8177ab6-a",
+    "case-0ff04f1a6a9c2a8f-a",
+    "case-47c4078f2ab5f6b8-b",
+    "case-21fb406a08574771-a",
+    "case-d4bd496c62d5242c-a",
+    "case-12503ed5ce7ad097-a",
+    "case-3544b2869b037321-b",
+    "case-a4ace2d0d3e4d96b-a",
+    "case-db7ee90419fd30c5-a",
+    "case-cb31234ba84c0691-a",
+    "case-46b1fbf6576e410d-a",
+    "case-556018f7bbe8a149-a",
+    "case-22254a24e9c493c7-a",
+    "case-7e46f17a808203f4-a",
+    "case-b959e1f1e5a1a139-a",
+    "case-810c297ad5d430f3-a",
+    "case-1e8f740bedddbaa8-a",
+    "case-477f8e5b78d587c6-a",
+    "case-6df010ee3bc16acb-a",
+    "case-0b7e87d1709b716b-a",
+    "case-7ca8a7099dde4deb-a",
+    "case-e1b7cd7a68cc577c-a",
+    "case-554a24c1591c3d67-a",
+    "case-a7ce09de39650b5b-a",
+    "case-824a4240830e5d3e-a",
+    "case-46629e287931564b-a",
+    "case-4a9181be5ca36773-a",
+    "case-72717323e960a5eb-a",
+    "case-97a2ade4bd069d86-a",
+    "case-86c4dfc8c2429970-a",
+    "case-2a35234c0ce246ba-a",
+    "case-d8f01d4df6936298-a",
+    "case-0f63d32410c68b69-a",
+    "case-98514424ccfc2427-a",
+    "case-215a8f7a38b1f52d-a",
+    "case-3449ccef9c366ec7-a",
+    "case-c381417ee7fe5d14-a",
+    "case-6b5d817a3ff5b2a6-a",
+    "case-c52e8820e84e7f71-a",
+    "case-6645d5b9e1a3f78c-a"
+  ],
+  "seed": 20261013,
+  "source_fingerprints": {
+    "data/business/v1/policies.json": "30093f6c7e75393141f1ad785a6b8be866b5bf55f493a7dcd9b4dae80266dc7d",
+    "data/business/v1/policy_specs.json": "7bea95583be2794f472e5c3dec1f0e79c19dfea899ced16adcdd61c8a6eef759",
+    "data/business/v1/spec.json": "a7584cc19a13a78b452a431b247b8b54a01c914fc7ea8351a698f25e4c2261b7",
+    "data/cases/boundary.jsonl": "738d024fc464851e0c895661e268f7dab6fbbc64cfc07a90d2c8fc8317d8aa9b",
+    "src/tool_agent_lab/business/rules.py": "d0467b591538ed63ec6c8e369daba59a51e8cd86ca4a84467b34544385fe633b",
+    "src/tool_agent_lab/knowledge/ingest.py": "dc2d87c2ff6322720cadbc75ab5d76a914ac3e7a2870a76c3a2e7651984c01d9",
+    "src/tool_agent_lab/knowledge/search.py": "c90f497986f6db59bea2b5799145c12957e539ff474a1038a7a94ef57e931eeb"
+  },
+  "splits": {
+    "test": {
+      "cohorts": {
+        "new_instance": 100,
+        "unseen_combination": 50,
+        "unseen_policy": 50
+      },
+      "count": 200,
+      "instances": 200,
+      "task_types": {
+        "clarify_or_handoff": 50,
+        "policy_refund": 50,
+        "reconcile_operation": 50,
+        "refund_and_coupon": 50
+      }
+    },
+    "train": {
+      "cohorts": {
+        "train": 400
+      },
+      "count": 400,
+      "instances": 320,
+      "task_types": {
+        "clarify_or_handoff": 100,
+        "policy_refund": 100,
+        "reconcile_operation": 100,
+        "refund_and_coupon": 100
+      }
+    },
+    "validation": {
+      "cohorts": {
+        "validation": 100
+      },
+      "count": 100,
+      "instances": 80,
+      "task_types": {
+        "clarify_or_handoff": 25,
+        "policy_refund": 25,
+        "reconcile_operation": 25,
+        "refund_and_coupon": 25
+      }
+    }
+  },
+  "version": "scenarios-v1"
+}

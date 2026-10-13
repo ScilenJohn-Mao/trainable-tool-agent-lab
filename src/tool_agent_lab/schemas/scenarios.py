@@ -1,5 +1,6 @@
 """Scenario expectations and user behaviour, separate from model-visible input."""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import AwareDatetime
@@ -7,7 +8,7 @@ from pydantic import AwareDatetime
 from tool_agent_lab.agent.config import AgentConfig
 from tool_agent_lab.agent.model_client import ModelConfig
 from tool_agent_lab.schemas.actions import ApprovalDecision
-from tool_agent_lab.schemas.business import NonNegativeInt
+from tool_agent_lab.schemas.business import NonNegativeInt, Order
 from tool_agent_lab.schemas.common import ContractModel, NonEmptyStr
 from tool_agent_lab.schemas.tasks import TaskCreate
 
@@ -32,6 +33,20 @@ class ScenarioExpectation(ContractModel):
     outcome: Literal["resolved", "answered", "rejected"]
 
 
+class HistoricalRefund(ContractModel):
+    order_id: NonEmptyStr
+    operation_key: NonEmptyStr
+    approval_request_id: NonEmptyStr
+    approved_at: AwareDatetime
+    committed_at: AwareDatetime
+
+
+class ScenarioInitialState(ContractModel):
+    data_dir: Path
+    orders: tuple[Order, ...]
+    historical_refunds: tuple[HistoricalRefund, ...] = ()
+
+
 class Scenario(ContractModel):
     scenario_id: NonEmptyStr
     family_id: NonEmptyStr
@@ -43,6 +58,7 @@ class Scenario(ContractModel):
     known_operation_key: NonEmptyStr | None = None
     user: UserBehaviour
     expected: ScenarioExpectation
+    initial_state: ScenarioInitialState | None = None
 
 
 class ExperimentConfig(ContractModel):

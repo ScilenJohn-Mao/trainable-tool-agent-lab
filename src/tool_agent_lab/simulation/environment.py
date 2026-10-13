@@ -17,7 +17,8 @@ from tool_agent_lab.business.rules import BusinessRules
 from tool_agent_lab.runtime.task_service import TaskService
 from tool_agent_lab.schemas.scenarios import ExperimentConfig, Scenario
 from tool_agent_lab.schemas.tasks import Task
-from tool_agent_lab.settings import Settings, load_settings
+from tool_agent_lab.settings import PROJECT_ROOT, Settings, load_settings
+from tool_agent_lab.simulation.initial_state import seed_initial_state
 from tool_agent_lab.simulation.user_simulator import UserSimulator
 from tool_agent_lab.storage.business_repository import BusinessRepository
 from tool_agent_lab.storage.checkpoints import open_checkpoints
@@ -102,6 +103,8 @@ async def open_environment(
 ) -> AsyncIterator[SimulationEnvironment]:
     """A new context resets a scenario; only its newly created directory is removed."""
     source = settings or load_settings()
+    if scenario.initial_state is not None:
+        source = source.model_copy(update={"business_data_dir": (PROJECT_ROOT / scenario.initial_state.data_dir).resolve()})
     experiment = experiment or ExperimentConfig(model=load_model_config(), agent=load_agent_config())
     spec = json.loads((source.business_data_dir / "spec.json").read_text(encoding="utf-8"))
     rules = BusinessRules.from_file(source.business_data_dir / "spec.json")
@@ -117,7 +120,10 @@ async def open_environment(
     try:
         runtime.prepare_runtime_dirs()
         # The seed entry point rejects runtime paths; pass the source settings for its safety boundary.
-        seed_demo(runtime.app_db_path, settings=source)
+        if scenario.initial_state is None:
+            seed_demo(runtime.app_db_path, settings=source)
+        else:
+            seed_initial_state(runtime.app_db_path, scenario.initial_state, rules)
         task = TaskService(runtime.app_db_path, business_time=rules.business_time,
                            model_version=experiment.model.version, config_version=experiment.agent.version).create(
             scenario.request, owner_id=scenario.owner_id,

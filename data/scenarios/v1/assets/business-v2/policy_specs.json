@@ -1,0 +1,95 @@
+{
+  "format_version": 1,
+  "versions": [
+    {
+      "amount_unit": "fen",
+      "business_time": "2026-08-17T12:00:00+08:00",
+      "currency": "CNY",
+      "effective_from": "2026-08-01T00:00:00+08:00",
+      "effective_to": "2026-09-01T00:00:00+08:00",
+      "minor_units_per_major": 100,
+      "policy_version": "mock-policy-v0",
+      "rules": {
+        "delay_coupon": {
+          "amount_minor": 300,
+          "category": "general_goods",
+          "compatible_with_refund": true,
+          "max_per_order": 1,
+          "minimum_delay_hours": 24,
+          "rule_id": "R-DELAY-01"
+        },
+        "handoff": {
+          "reasons": [
+            "unsupported_category",
+            "outside_refund_window",
+            "unverified_damage",
+            "order_unresolved"
+          ],
+          "rule_id": "R-HANDOFF-01"
+        },
+        "refund": {
+          "amount": "full_paid_amount",
+          "category": "general_goods",
+          "max_per_order": 1,
+          "requires_verified_damage": true,
+          "rule_id": "R-REFUND-01",
+          "window_days": 5
+        }
+      },
+      "write_actions_requiring_approval": [
+        "request_refund",
+        "issue_coupon",
+        "create_handoff"
+      ]
+    },
+    {
+      "amount_unit": "fen",
+      "business_time": "2026-09-17T12:00:00+08:00",
+      "currency": "CNY",
+      "effective_from": "2026-09-01T00:00:00+08:00",
+      "effective_to": "2026-10-01T00:00:00+08:00",
+      "minor_units_per_major": 100,
+      "policy_version": "mock-policy-v1",
+      "purpose": "手工联调样例；不作为训练集或固定测试集",
+      "rules": {
+        "delay_coupon": {
+          "amount_minor": 500,
+          "category": "general_goods",
+          "compatible_with_refund": true,
+          "max_per_order": 1,
+          "minimum_delay_hours": 24,
+          "rule_id": "R-DELAY-01"
+        },
+        "handoff": {
+          "reasons": [
+            "unsupported_category",
+            "outside_refund_window",
+            "unverified_damage",
+            "order_unresolved"
+          ],
+          "rule_id": "R-HANDOFF-01"
+        },
+        "refund": {
+          "amount": "full_paid_amount",
+          "category": "general_goods",
+          "max_per_order": 1,
+          "requires_verified_damage": true,
+          "rule_id": "R-REFUND-01",
+          "window_days": 7
+        }
+      },
+      "task_types": [
+        "policy_refund",
+        "refund_and_coupon",
+        "reconcile_operation",
+        "clarify_or_handoff"
+      ],
+      "version": "business-v1",
+      "write_actions_requiring_approval": [
+        "request_refund",
+        "issue_coupon",
+        "create_handoff"
+      ]
+    }
+  ]
+}
