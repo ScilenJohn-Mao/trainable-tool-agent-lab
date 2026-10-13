@@ -42,7 +42,7 @@ class CompletionBridge(Runnable):
                            "requested_model": request["model"], "messages": deepcopy(messages),
                            "tools": deepcopy(list(self.tools)), "response": raw})
         choice = raw["choices"][0]
-        message = convert_to_messages([choice["message"]])[0]
+        message = convert_to_messages([{"content": "", **choice["message"]}])[0]
         message.response_metadata = {k: deepcopy(v) for k, v in choice.items() if k not in ("message", "index")}
         return message
 

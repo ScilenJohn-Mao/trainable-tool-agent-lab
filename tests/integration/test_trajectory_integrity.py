@@ -164,6 +164,14 @@ class CompletionObject:
     def __init__(self, values):
         self.values = values
     def model_dump(self, **kwargs):
+        if kwargs.get("exclude_none"):
+            def without_none(value):
+                if isinstance(value, dict):
+                    return {key: without_none(item) for key, item in value.items() if item is not None}
+                if isinstance(value, list):
+                    return [without_none(item) for item in value]
+                return value
+            return without_none(deepcopy(self.values))
         return deepcopy(self.values)
 
 
@@ -215,6 +223,8 @@ def test_async_adapter_preserves_ids_arguments_usage_and_actual_budget():
         assert model.requests[0]["tools"][0]["function"]["name"] == "get_order"
         assert model.options[0]["max_retries"] == 0
         assert model.client_factory_calls == 1
+        assert "content" not in recorder.records[0]["response"]["choices"][0]["message"]
+        assert reply.message.content is None
     asyncio.run(run())
 
 
