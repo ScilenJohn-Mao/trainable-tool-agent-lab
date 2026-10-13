@@ -32,7 +32,8 @@ def check(config):
         if not git_packages or any(ART_REVISION not in p["source"]["git"] for p in git_packages):
             raise ValueError("Lock differs from fixed ART revision")
         locks[relative] = {"sha256": file_hash(path), "packages": len(lock["package"])}
-    pending = ["Linux environment installation", "actual ART token/mask and GPU update verification"]
+    pending = ["Linux environment installation", "installed runtime compatibility patch verification",
+               "actual ART token/mask and GPU update verification"]
     if config.base_revision is None:
         pending.append("verified base-model revision")
     if not config.base_model.is_dir():
@@ -61,12 +62,11 @@ def preflight(config):
     if not torch.cuda.is_available() or torch.cuda.get_device_capability(0) < (7, 5):
         raise ValueError("Fixed vLLM runtime requires CUDA GPU capability >=7.5; V100 is unsupported")
     runtime_python = TRAINING_ROOT / "runtime/.venv/bin/python"
-    details = subprocess.check_output([str(runtime_python), "-c",
-        "import importlib.metadata as m,json;d=m.distribution('art-vllm-runtime');"
-        "print(json.dumps({'versions':{k:m.version(k) for k in ['art-vllm-runtime','vllm']},"
-        "'revision':json.loads(d.read_text('direct_url.json') or '{}').get('vcs_info',{}).get('commit_id')}))"], text=True)
+    details = subprocess.check_output([str(runtime_python), str(TRAINING_ROOT / "runtime/prepare.py"), "--check"], text=True)
     runtime = json.loads(details)
-    if runtime != {"versions": {"art-vllm-runtime": config.runtime_version, "vllm": config.vllm_version}, "revision": ART_REVISION}:
+    if (runtime.get("versions") != {"art-vllm-runtime": config.runtime_version, "vllm": config.vllm_version}
+            or runtime.get("revision") != ART_REVISION
+            or not runtime.get("compatibility_patch", {}).get("applied")):
         raise ValueError("Installed runtime differs from fixed configuration")
     return {"gpu": torch.cuda.get_device_name(0), "cuda": torch.version.cuda, "torch": torch.__version__,
             "capability": torch.cuda.get_device_capability(0), "runtime": runtime}
@@ -96,6 +96,7 @@ async def run(config):
     from transformers import AutoTokenizer
 
     os.environ["ART_VLLM_RUNTIME_PROJECT_ROOT"] = str(TRAINING_ROOT / "runtime")
+    os.environ["ART_VLLM_RUNTIME_BIN"] = str(TRAINING_ROOT / "runtime/.venv/bin/art-vllm-runtime-server")
     tokenizer = AutoTokenizer.from_pretrained(str(config.base_model), local_files_only=True)
     output = config.output_dir / (config.name + "-" + uuid4().hex)
     output.mkdir(parents=True)

@@ -270,6 +270,7 @@ def test_training_dispatch_and_failure_report_use_existing_backend_contract(tmp_
     """Dispatch spy only; no actual ART import, model loading or parameter update."""
     import types
     import art_trainlab.train as training
+    monkeypatch.setenv("ART_VLLM_RUNTIME_BIN", "external-runtime-fixture")
 
     config = load_config("configs/training/smoke.yaml").model_copy(update={
         "output_dir": tmp_path, "steps": 1, "max_sampling_groups": 2})
@@ -332,6 +333,8 @@ def test_training_dispatch_and_failure_report_use_existing_backend_contract(tmp_
     saved = json.loads(next(tmp_path.glob("*/training.json")).read_text(encoding="utf-8"))
     assert len(saved["groups"]) == 2
     assert saved["status"] == ("failed" if fail_update else "completed")
+    import os
+    assert os.environ["ART_VLLM_RUNTIME_BIN"] == str(training.TRAINING_ROOT / "runtime/.venv/bin/art-vllm-runtime-server")
 
 
 def test_linux_preflight_rejects_v100_before_backend_loading(tmp_path, monkeypatch):
@@ -353,3 +356,39 @@ def test_linux_preflight_rejects_v100_before_backend_loading(tmp_path, monkeypat
     monkeypatch.setitem(sys.modules, "torch", torch)
     with pytest.raises(ValueError, match="V100 is unsupported"):
         preflight(config)
+
+
+@pytest.mark.parametrize("applied", [False, True])
+def test_linux_preflight_requires_and_records_checked_runtime_patch(tmp_path, monkeypatch, applied):
+    """GPU identity fixture only; the runtime checker is exercised separately on CPU."""
+    import types
+    import art_trainlab.train as training
+    from art_trainlab.config import ART_REVISION
+
+    assets = tmp_path / "Qwen2.5-7B-Instruct"
+    assets.mkdir()
+    config = load_config("configs/training/smoke.yaml").model_copy(update={"base_model": assets, "base_revision": "0" * 40})
+    monkeypatch.setattr(training.sys, "platform", "linux")
+    monkeypatch.setattr(training.sys, "prefix", str(tmp_path / "training-env-fixture"))
+    distribution = SimpleNamespace(version="0.5.20", read_text=lambda name: json.dumps({"vcs_info": {"commit_id": ART_REVISION}}))
+    monkeypatch.setattr(training.importlib.metadata, "distribution", lambda name: distribution)
+    versions = {"langchain-core": "1.6.9", "langgraph": "1.2.14", "langgraph-checkpoint-sqlite": "3.1.1", "mcp": "1.30.0", "pydantic": "2.13.5"}
+    monkeypatch.setattr(training.importlib.metadata, "version", lambda name: versions[name])
+    torch = types.ModuleType("torch")
+    torch.__version__, torch.version = "fixture", SimpleNamespace(cuda="fixture")
+    torch.cuda = SimpleNamespace(is_available=lambda: True, get_device_capability=lambda device: (8, 6),
+                                get_device_name=lambda device: "GPU identity fixture")
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    patch = {"applied": applied, "source_sha256": "fixture-patched-source"}
+    details = {"versions": {"art-vllm-runtime": "0.1.0", "vllm": "0.25.1+cu129"},
+               "revision": ART_REVISION, "compatibility_patch": patch}
+    def checked(command, **kwargs):
+        assert command == [str(training.TRAINING_ROOT / "runtime/.venv/bin/python"),
+                           str(training.TRAINING_ROOT / "runtime/prepare.py"), "--check"]
+        return json.dumps(details)
+    monkeypatch.setattr(training.subprocess, "check_output", checked)
+    if applied:
+        assert preflight(config)["runtime"]["compatibility_patch"] == patch
+    else:
+        with pytest.raises(ValueError, match="Installed runtime differs"):
+            preflight(config)

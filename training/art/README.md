@@ -16,10 +16,14 @@ Linux 使用两个独立环境：
 ```bash
 uv sync --project training/art --locked --cache-dir .uv-cache
 uv sync --project training/art/runtime --locked --cache-dir .uv-cache
+training/art/runtime/.venv/bin/python training/art/runtime/prepare.py --apply
+training/art/runtime/.venv/bin/python training/art/runtime/prepare.py --check
 uv run --project training/art --locked --no-sync --cache-dir .uv-cache python -m art_trainlab.train --config configs/training/smoke.yaml --base-revision VERIFIED_REVISION --train
 ```
 
 将 `VERIFIED_REVISION` 换成实际已验证的基座 revision。训练入口只使用本地资产，关闭进程内 HF 下载、W&B、Weave 和 LangSmith 外部跟踪，设置 ART runtime 项目路径。准备环境和缓存后，仍需实际断外网验证采样与更新。源码不包含权重或凭据；环境准备与训练会使用大量磁盘/显存。
+
+`runtime/prepare.py` 不导入 torch 或 vLLM。它核对实际 runtime/vLLM 版本、Git revision和策略标注源码 SHA-256，再原子应用一个固定兼容补丁：vLLM 的 `dummy_run` 预热/图捕获仍执行模型，但跳过 ART 对虚拟请求的策略标注并清理残留策略上下文；真实请求仍由原 ART 路径严格核对。未知源码或已有额外修改明确拒绝，不按请求 ID 前缀忽略错误。重复执行不重复修改文件；依赖重新同步后应再次执行。训练 preflight 要求补丁已安装，并在训练报告中记录原始/补丁后的源码 hash，不能只凭未变的包版本认定源码一致。执行准备命令前停止受影响的 ART/runtime 进程。此 CPU 检查不代表实际 CUDA 预热或训练更新已通过。
 
 ART 固定为0.5.20、Git revision `12162f241320f2343f1df162e834dc5ae03f740d`，runtime也来自同一revision的`vllm_runtime`子目录，固定vLLM0.25.1+cu129。复用其`init_chat_model`、`wrap_rollout`、`Trajectory/LegacyHistory`和`LocalBackend.train`；共享LangGraph、七工具、原确认/事务服务和业务验证器均沿原路径。参考[ART LangGraph接口](https://art.openpipe.ai/integrations/langgraph-integration/)。
 
