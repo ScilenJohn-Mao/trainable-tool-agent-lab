@@ -170,8 +170,11 @@ class CompletionObject:
 class FakeARTModel:
     def __init__(self, source):
         self.source, self.requests, self.options = source, [], []
-        self.openai_client = self
+        self.client_factory_calls = 0
         self.chat = SimpleNamespace(completions=self)
+    def openai_client(self):
+        self.client_factory_calls += 1
+        return self
     def with_options(self, **kwargs):
         self.options.append(kwargs)
         return self
@@ -211,6 +214,7 @@ def test_async_adapter_preserves_ids_arguments_usage_and_actual_budget():
         assert model.requests[0]["extra_body"]["return_token_ids"] is True
         assert model.requests[0]["tools"][0]["function"]["name"] == "get_order"
         assert model.options[0]["max_retries"] == 0
+        assert model.client_factory_calls == 1
     asyncio.run(run())
 
 
@@ -270,6 +274,8 @@ def test_training_dispatch_and_failure_report_use_existing_backend_contract(tmp_
     """Dispatch spy only; no actual ART import, model loading or parameter update."""
     import types
     import art_trainlab.train as training
+    import os
+    monkeypatch.setenv("PATH", os.environ.get("PATH", ""))
     monkeypatch.setenv("ART_VLLM_RUNTIME_BIN", "external-runtime-fixture")
 
     config = load_config("configs/training/smoke.yaml").model_copy(update={
@@ -333,8 +339,8 @@ def test_training_dispatch_and_failure_report_use_existing_backend_contract(tmp_
     saved = json.loads(next(tmp_path.glob("*/training.json")).read_text(encoding="utf-8"))
     assert len(saved["groups"]) == 2
     assert saved["status"] == ("failed" if fail_update else "completed")
-    import os
     assert os.environ["ART_VLLM_RUNTIME_BIN"] == str(training.TRAINING_ROOT / "runtime/.venv/bin/art-vllm-runtime-server")
+    assert os.environ["PATH"].split(os.pathsep)[0] == str(training.TRAINING_ROOT / "runtime/.venv/bin")
 
 
 def test_linux_preflight_rejects_v100_before_backend_loading(tmp_path, monkeypatch):

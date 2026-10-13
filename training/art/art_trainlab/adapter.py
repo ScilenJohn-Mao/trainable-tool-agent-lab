@@ -23,7 +23,7 @@ class CompletionBridge(Runnable):
     async def ainvoke(self, input, config=None, **kwargs):
         settings = self.config()
         messages = convert_to_openai_messages(input)
-        client = self.model.openai_client.with_options(max_retries=0, timeout=settings.timeout_seconds)
+        client = self.model.openai_client().with_options(max_retries=0, timeout=settings.timeout_seconds)
         request = {"model": self.model.get_inference_name(), "messages": messages,
                    "max_tokens": settings.max_tokens, "temperature": settings.temperature,
                    "logprobs": True, "top_logprobs": 0, "stream": False, "n": 1,

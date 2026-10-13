@@ -96,7 +96,9 @@ async def run(config):
     from transformers import AutoTokenizer
 
     os.environ["ART_VLLM_RUNTIME_PROJECT_ROOT"] = str(TRAINING_ROOT / "runtime")
-    os.environ["ART_VLLM_RUNTIME_BIN"] = str(TRAINING_ROOT / "runtime/.venv/bin/art-vllm-runtime-server")
+    runtime_bin = TRAINING_ROOT / "runtime/.venv/bin"
+    os.environ["ART_VLLM_RUNTIME_BIN"] = str(runtime_bin / "art-vllm-runtime-server")
+    os.environ["PATH"] = os.pathsep.join((str(runtime_bin), os.environ.get("PATH", "")))
     tokenizer = AutoTokenizer.from_pretrained(str(config.base_model), local_files_only=True)
     output = config.output_dir / (config.name + "-" + uuid4().hex)
     output.mkdir(parents=True)
