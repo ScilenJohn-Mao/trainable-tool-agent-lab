@@ -24,6 +24,7 @@ from tool_agent_lab.storage.business_repository import BusinessRepository
 from tool_agent_lab.storage.checkpoints import open_checkpoints
 from tool_agent_lab.storage.database import connect
 from tool_agent_lab.storage.event_repository import EventRepository
+from tool_agent_lab.storage.task_repository import TaskRepository
 
 
 class SimulationEnvironment:
@@ -37,6 +38,29 @@ class SimulationEnvironment:
         self.user = UserSimulator(scenario.user)
         self.state: dict | None = None
         self.error: dict | None = None
+        self.initial_business = self.business_snapshot()
+
+    def business_snapshot(self) -> dict:
+        """Read authoritative balances, ledger and consumed confirmation snapshots."""
+        with connect(self.settings.app_db_path) as connection:
+            business, tasks = BusinessRepository(connection), TaskRepository(connection)
+            orders = [business.get_order(row[0], self.task.owner_id).model_dump(mode="json")
+                      for row in connection.execute("SELECT order_id FROM orders WHERE owner_id=? ORDER BY order_id",
+                                                    (self.task.owner_id,))]
+            ledger = [business.get_operation(row[0], self.task.owner_id).model_dump(mode="json")
+                      for row in connection.execute("SELECT operation_key FROM operations WHERE owner_id=? ORDER BY operation_key",
+                                                    (self.task.owner_id,))]
+            approvals = []
+            for row in connection.execute(
+                "SELECT p.task_id,a.request_id FROM approvals a JOIN proposals p USING(proposal_id,proposal_version) "
+                "WHERE a.owner_id=? ORDER BY a.rowid", (self.task.owner_id,),
+            ):
+                approval = tasks.get_approval(row[0], row[1], self.task.owner_id)
+                consumed = tasks.approval_consumed_at(row[0], row[1], self.task.owner_id)
+                approvals.append(approval.model_dump(mode="json") | {
+                    "consumed_at": consumed.isoformat() if consumed else None,
+                })
+        return {"orders": orders, "ledger": ledger, "approvals": approvals}
 
     async def start(self) -> dict:
         self.state = await self.agent.start(self.task.task_id, owner_id=self.task.owner_id)
@@ -88,6 +112,7 @@ class SimulationEnvironment:
             "task": task.model_dump(mode="json"), "state": snapshot.values,
             "stop_reason": "user_script_exhausted" if task.status in ("waiting_input", "waiting_approval") else task.status.value,
             "orders": orders, "operations": operations, "events": events, "error": self.error,
+            "business": self.business_snapshot(), "initial_business": self.initial_business,
         }
         (self.settings.log_dir / "trajectory.json").write_text(
             json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8",
@@ -100,6 +125,7 @@ async def open_environment(
     scenario: Scenario, *, settings: Settings | None = None, experiment: ExperimentConfig | None = None,
     model: ModelClient | None = None, mock_responses: Sequence[AssistantMessage] = (),
     root: str | Path | None = None, keep_artifacts: bool = False,
+    nodes_factory=AgentNodes,
 ) -> AsyncIterator[SimulationEnvironment]:
     """A new context resets a scenario; only its newly created directory is removed."""
     source = settings or load_settings()
@@ -129,7 +155,7 @@ async def open_environment(
             scenario.request, owner_id=scenario.owner_id,
         )
         async with open_checkpoints(runtime.checkpoint_db_path, application_database=runtime.app_db_path) as saver:
-            agent = Agent(AgentNodes(runtime.app_db_path, runtime.business_data_dir, rules,
+            agent = Agent(nodes_factory(runtime.app_db_path, runtime.business_data_dir, rules,
                                     model or ModelClient(experiment.model, mock_responses=mock_responses), experiment.agent),
                           checkpointer=saver)
             environment = SimulationEnvironment(scenario, runtime, experiment, agent, task)

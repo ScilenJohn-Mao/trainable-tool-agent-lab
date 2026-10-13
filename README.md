@@ -441,3 +441,5 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 独立场景、仿真用户与真实 MCP 的脚本模型演示，见[业务仿真说明](docs/simulation.md)。
 
 固定训练与评测场景的构建、冻结核验及加载接口，见[数据集说明](docs/datasets.md)。
+
+固定场景运行、独立判分、逐次证据和指标 JSON，见[评测说明](docs/evaluation.md)。
