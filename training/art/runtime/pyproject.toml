@@ -1,0 +1,22 @@
+[project]
+name = "tool-agent-lab-art-runtime"
+version = "0.1.0"
+description = "Separate ART-owned vLLM serving environment"
+requires-python = ">=3.12,<3.13"
+dependencies = ["art-vllm-runtime[cuda12]==0.1.0"]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+override-dependencies = ["flashinfer-python==0.6.13", "transformers==5.12.1", "xgrammar==0.2.3"]
+
+[tool.uv.sources]
+art-vllm-runtime = { git = "https://github.com/OpenPipe/ART.git", rev = "12162f241320f2343f1df162e834dc5ae03f740d", subdirectory = "vllm_runtime" }
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

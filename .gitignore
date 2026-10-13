@@ -16,6 +16,7 @@ playwright-report/
 test-results/
 build/
 artifacts/
+.art/
 /models/
 .env
 .env.*

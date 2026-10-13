@@ -59,6 +59,9 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "frontend/src/main.tsx": "export {};\n",
         "training/art/pyproject.toml": '# Test fixture, not a training environment.\n',
         "training/art/uv.lock": '# Test fixture, not a generated training lock.\n',
+        "training/art/runtime/pyproject.toml": '# Runtime manifest fixture.\n',
+        "training/art/runtime/uv.lock": '# Runtime lock fixture.\n',
+        "training/art/art_trainlab/adapter.py": 'VALUE = 1\n',
         "inference/pyproject.toml": '# Inference packaging fixture.\n',
         "inference/uv.lock": '# Lock presence fixture.\n',
     }
@@ -90,6 +93,8 @@ def test_resources_retained_and_environment_runtime_files_excluded(source_tree: 
         "data/business/runtime.sqlite3.worker.lock": "ignore",
         "training/art/custom-env/pyvenv.cfg": "home = unused",
         "training/art/checkpoints/step-1/config.json": "ignore",
+        "training/art/.art/langgraph/trajectory": "ignore",
+        "training/art/runtime/.art/worker.log": "ignore",
         "scripts/previous.zip": "ignore",
         "scripts/previous.zip.sha256": "ignore",
         "scripts/old.tar.gz": "ignore",

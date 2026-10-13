@@ -1,0 +1,17 @@
+name: qwen7b-smoke
+base_model: models/base/Qwen2.5-7B-Instruct
+base_revision: null
+steps: 2
+max_sampling_groups: 10
+group_size: 2
+groups_per_step: 1
+active_generation: 1
+sequence_tokens: 8192
+output_tokens: 2048
+max_decisions: 12
+temperature: 1.0
+learning_rate: 0.000005
+loss_fn: cispo
+lora_rank: 16
+lora_alpha: 32
+gpu_memory_utilization: 0.55

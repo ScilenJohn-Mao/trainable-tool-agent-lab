@@ -30,5 +30,5 @@ packages = ["src/tool_agent_lab"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "training/art"]
 addopts = "-ra"

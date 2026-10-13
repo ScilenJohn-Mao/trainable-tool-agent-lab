@@ -62,7 +62,7 @@ required_files = [
 exclude_directories = [
   ".venv", "venv", "env", ".uv", ".uv-cache", "uv-cache", ".cache",
   "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-  ".git", ".idea", ".vscode", ".agents", ".codex", ".claude", "node_modules", "artifacts",
+  ".git", ".idea", ".vscode", ".agents", ".codex", ".claude", ".art", "node_modules", "artifacts",
   "dist", "build", ".next", "coverage", "logs", "checkpoints", "weights",
   "model-cache", "huggingface", "playwright-report", "test-results",
 ]

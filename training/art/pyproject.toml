@@ -1,0 +1,33 @@
+[project]
+name = "tool-agent-lab-art"
+version = "0.1.0"
+description = "Local ART training adapter for the shared after-sales agent"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "trainable-tool-agent-lab",
+  "openpipe-art[backend,langgraph]==0.5.20",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["art_trainlab"]
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+constraint-dependencies = [
+  "langchain-core==1.6.9", "langgraph==1.2.14",
+  "langgraph-checkpoint-sqlite==3.1.1", "mcp==1.30.0", "pydantic==2.13.5",
+]
+
+[tool.uv.sources]
+trainable-tool-agent-lab = { path = "../..", editable = true }
+openpipe-art = { git = "https://github.com/OpenPipe/ART.git", rev = "12162f241320f2343f1df162e834dc5ae03f740d" }
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

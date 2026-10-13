@@ -443,3 +443,5 @@ uv run --no-sync --cache-dir .uv-cache python -m pytest -q tests/integration/tes
 固定训练与评测场景的构建、冻结核验及加载接口，见[数据集说明](docs/datasets.md)。
 
 固定场景运行、独立判分、逐次证据和指标 JSON，见[评测说明](docs/evaluation.md)。
+
+共享 Agent 的 ART 接入、独立环境、轨迹完整性与训练入口，见[训练说明](training/art/README.md)。
